@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"rediska/core"
 )
 
 func Run(host string, port int) error {
@@ -29,9 +31,9 @@ func Run(host string, port int) error {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	log.Printf("client connected: %s", conn.RemoteAddr())
-	buf := make([]byte, 1024)
+	reader := bufio.NewReader(conn)
 	for {
-		n, err := conn.Read(buf)
+		value, err := core.Decode(reader)
 		if err != nil {
 			if err != io.EOF {
 				log.Printf("read error from %s: %v \n", conn.RemoteAddr(), err)
@@ -39,8 +41,8 @@ func handleConnection(conn net.Conn) {
 			log.Printf("client disconnected: %s \n", conn.RemoteAddr())
 			return
 		}
-		log.Printf("received from %s (%d bytes): %q \n", conn.RemoteAddr(), n, buf[:n])
-		if _, err := conn.Write(buf[:n]); err != nil {
+		log.Printf("received from %s: %#v", conn.RemoteAddr(), value)
+		if _, err := conn.Write([]byte("+PONG\r\n")); err != nil {
 			log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
 			return
 		}
