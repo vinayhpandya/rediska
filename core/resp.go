@@ -7,44 +7,6 @@ import (
 	"strconv"
 )
 
-// import (
-// 	"bufio"
-// 	"fmt"
-// 	"io"
-// 	"strconv"
-// )
-
-// // Decode reads one RESP value from r and returns it as a Go value.
-// // The concrete return type depends on the RESP type tag:
-// //
-// //	'+' simple string  -> string
-// //	'-' error          -> string
-// //	':' integer        -> int64
-// //	'$' bulk string    -> string  ("" for null bulk string)
-// //	'*' array          -> []any   (nil for null array)
-// func Decode(r *bufio.Reader) (any, error) {
-// 	typeByte, err := r.ReadByte()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	switch typeByte {
-// 	case '+':
-// 		return readSimpleString(r)
-// 	case '-':
-// 		return readError(r)
-// 	case ':':
-// 		return readInteger(r)
-// 	case '$':
-// 		return readBulkString(r)
-// 	case '*':
-// 		return readArray(r)
-// 	default:
-// 		return nil, fmt.Errorf("unknown RESP type byte: %q", typeByte)
-// 	}
-// }
-
-// readLine reads up to and including \r\n, returning the bytes before \r\n.
 func readLine(r *bufio.Reader) (string, error) {
 	line, err := r.ReadString('\n')
 	if err != nil {
@@ -119,36 +81,12 @@ func readArray(r *bufio.Reader) ([]any, error) {
 	for i := 0; i < count; i++ {
 		val, err := Decode(r)
 		if err != nil {
-			return nil, fmt.Errorf("Error reading array element %d, %w", val, err)
+			return nil, fmt.Errorf("Error reading array element %d, %w", i, err)
 		}
 		result[i] = val
 	}
 	return result, nil
 }
-
-// func readArray(r *bufio.Reader) ([]any, error) {
-// 	line, err := readLine(r)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	count, err := strconv.Atoi(line)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("invalid array length %q: %w", line, err)
-// 	}
-// 	if count == -1 {
-// 		return nil, nil
-// 	}
-
-// 	result := make([]any, count)
-// 	for i := 0; i < count; i++ {
-// 		val, err := Decode(r)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("reading array element %d: %w", i, err)
-// 		}
-// 		result[i] = val
-// 	}
-// 	return result, nil
-// }
 
 func Decode(r *bufio.Reader) (any, error) {
 	typeByte, err := r.ReadByte()

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"rediska/commands"
 	"rediska/core"
 )
 
@@ -13,7 +14,7 @@ func Run(host string, port int) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	listener, error := net.Listen("tcp", addr)
 	if error != nil {
-		log.Fatal("Error connecting to host %v \n", host)
+		log.Fatalf("Error connecting to host %v \n", host)
 		return fmt.Errorf("listen on %s: %w", addr, error)
 	}
 	defer listener.Close()
@@ -41,8 +42,17 @@ func handleConnection(conn net.Conn) {
 			log.Printf("client disconnected: %s \n", conn.RemoteAddr())
 			return
 		}
-		log.Printf("received from %s: %#v", conn.RemoteAddr(), value)
-		if _, err := conn.Write([]byte("+PONG\r\n")); err != nil {
+		cmd, err := commands.ParseCommand(value)
+		if err != nil {
+			log.Printf("parse error from %s: %v", conn.RemoteAddr(), err)
+			if _, werr := conn.Write(core.EncodeError("ERR " + err.Error())); werr != nil {
+				log.Printf("write error to %s: %v", conn.RemoteAddr(), werr)
+				return
+			}
+			continue // keep connection alive on command-level errors
+		}
+		reply := commands.Dispatch(cmd)
+		if _, err := conn.Write(reply); err != nil {
 			log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
 			return
 		}

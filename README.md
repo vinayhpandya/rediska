@@ -34,3 +34,22 @@ rediska is listening on 127.0.0.1:7379
 2026/05/14 11:38:26 received from 127.0.0.1:51416: []interface {}{"set", "k", "v"}
 2026/05/14 11:38:26 client disconnected: 127.0.0.1:51416 
 ```
+
+## Milestone 3
+Implementing the PING command and setting up command registry
+
+```bash
+go run . --host 127.0.0.1 --port 7379
+```
+
+For the client
+```bash
+redis-cli -p 7379 PING "Vinay"         
+"Vinay"
+```
+
+Using telnet we get
+```bash
+printf '*1\r\n$4\r\nPING\r\n' | nc localhost 7379 
++PONG
+```
