@@ -49,9 +49,15 @@ func handleConnection(conn net.Conn) {
 				log.Printf("write error to %s: %v", conn.RemoteAddr(), werr)
 				return
 			}
-			continue // keep connection alive on command-level errors
+			continue
 		}
+
+		log.Printf("received command: %s args=%v", cmd.Name, cmd.Args)
+
 		reply := commands.Dispatch(cmd)
+
+		log.Printf("reply: %q", string(reply))
+
 		if _, err := conn.Write(reply); err != nil {
 			log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
 			return
