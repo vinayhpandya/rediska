@@ -53,3 +53,10 @@ Using telnet we get
 printf '*1\r\n$4\r\nPING\r\n' | nc localhost 7379 
 +PONG
 ```
+
+## Milestone 4
+Add a single go-routine to handle and execute the commands
+
+1. Remove sync locks on hashmap to store data
+2. Have a single go routing and channel (buffered)
+   channels to check for data and execute them

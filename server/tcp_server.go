@@ -10,6 +10,11 @@ import (
 	"rediska/core"
 )
 
+type CommandRequest struct {
+	cmd     commands.Command
+	replych chan []byte
+}
+
 func Run(host string, port int) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	listener, error := net.Listen("tcp", addr)
@@ -18,6 +23,11 @@ func Run(host string, port int) error {
 		return fmt.Errorf("listen on %s: %w", addr, error)
 	}
 	defer listener.Close()
+
+	commandCh := make(chan CommandRequest, 256)
+
+	go dispatchWorker(commandCh)
+
 	fmt.Printf("rediska is listening on %s \n", addr)
 	for {
 		conn, err := listener.Accept()
@@ -25,11 +35,17 @@ func Run(host string, port int) error {
 			log.Printf("accept error: %v \n", err)
 			continue
 		}
-		go handleConnection(conn)
+		go handleConnection(conn, commandCh)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func dispatchWorker(commandCh <-chan CommandRequest) {
+	for req := range commandCh {
+		reply := commands.Dispatch(&req.cmd)
+		req.replych <- reply
+	}
+}
+func handleConnection(conn net.Conn, commandCh chan<- CommandRequest) {
 	defer conn.Close()
 	log.Printf("client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
@@ -42,7 +58,7 @@ func handleConnection(conn net.Conn) {
 			log.Printf("client disconnected: %s \n", conn.RemoteAddr())
 			return
 		}
-		cmd, err := commands.ParseCommand(value)
+		command, err := commands.ParseCommand(value)
 		if err != nil {
 			log.Printf("parse error from %s: %v", conn.RemoteAddr(), err)
 			if _, werr := conn.Write(core.EncodeError("ERR " + err.Error())); werr != nil {
@@ -51,11 +67,13 @@ func handleConnection(conn net.Conn) {
 			}
 			continue
 		}
-
-		log.Printf("received command: %s args=%v", cmd.Name, cmd.Args)
-
-		reply := commands.Dispatch(cmd)
-
+		log.Printf("received command: %s args=%v", command.Name, command.Args)
+		replych := make(chan []byte, 1)
+		commandCh <- CommandRequest{
+			cmd:     *command,
+			replych: replych,
+		}
+		reply := <-replych
 		log.Printf("reply: %q", string(reply))
 
 		if _, err := conn.Write(reply); err != nil {
