@@ -8,6 +8,7 @@ import (
 	"net"
 	"rediska/commands"
 	"rediska/core"
+	"strings"
 )
 
 type CommandRequest struct {
@@ -15,8 +16,31 @@ type CommandRequest struct {
 	replych chan []byte
 }
 
-func Run(host string, port int) error {
+func Run(host string, port int, appendOnly bool, appendFilename string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
+	fmt.Println("Append file name is ", appendFilename)
+	if appendOnly {
+		fmt.Println("Running rediska in append only file mode")
+		aof, error := core.NewAOF(appendFilename)
+		if error != nil {
+			return fmt.Errorf("init AOF: %w", error)
+		}
+		defer aof.Close()
+		commands.SetAOF(aof)
+		log.Println("Recovering from appendOnly file")
+		if err := aof.Recover(func(args []string) {
+			if len(args) == 0 {
+				return
+			}
+			cmd := &commands.Command{
+				Name: strings.ToUpper(args[0]),
+				Args: args[1:],
+			}
+			commands.Dispatch(cmd)
+		}); err != nil {
+			return fmt.Errorf("Error during AOF recovery: %w", err)
+		}
+	}
 	listener, error := net.Listen("tcp", addr)
 	if error != nil {
 		log.Fatalf("Error connecting to host %v \n", host)

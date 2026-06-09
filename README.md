@@ -60,3 +60,16 @@ Add a single go-routine to handle and execute the commands
 1. Remove sync locks on hashmap to store data
 2. Have a single go routing and channel (buffered)
    channels to check for data and execute them
+
+## Milestone 5
+Add AOF functionality in rediska
+
+1. Allow redis to recover from AOF file once server crashes or shuts down
+2. Currently it is set on every write command instead of
+   BGWRITETOAOF
+3. TODO: Need to implement DEL and cleanup to avoid AOF getting too big and
+   also run compaction like every second
+
+```bash
+ go run . --host 127.0.0.1 --port 7379 --appendOnly=true --appendOnlyFile=/tmp/tempfile.aof
+```

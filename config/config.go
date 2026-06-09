@@ -1,6 +1,8 @@
 package config
 
 var (
-	Host string
-	Port int
+	Host           string
+	Port           int
+	AppendOnly     bool
+	AppendOnlyFile string
 )
