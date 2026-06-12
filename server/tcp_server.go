@@ -9,6 +9,7 @@ import (
 	"rediska/commands"
 	"rediska/core"
 	"strings"
+	"time"
 )
 
 type CommandRequest struct {
@@ -52,6 +53,7 @@ func Run(host string, port int, appendOnly bool, appendFilename string) error {
 
 	go dispatchWorker(commandCh)
 
+	go startActiveExpiry(commandCh)
 	fmt.Printf("rediska is listening on %s \n", addr)
 	for {
 		conn, err := listener.Accept()
@@ -63,6 +65,29 @@ func Run(host string, port int, appendOnly bool, appendFilename string) error {
 	}
 }
 
+func startActiveExpiry(commandCh chan<- CommandRequest) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for range ticker.C {
+		for {
+			replyCh := make(chan []byte, 1)
+			commandCh <- CommandRequest{
+				cmd:     commands.Command{Name: "_EXPIRY"},
+				replych: replyCh,
+			}
+			reply := <-replyCh
+			deletedKeys, err := core.DecodeInteger(reply)
+			if err != nil {
+				break
+			}
+
+			if deletedKeys < 5 {
+				break
+			}
+
+		}
+	}
+
+}
 func dispatchWorker(commandCh <-chan CommandRequest) {
 	for req := range commandCh {
 		reply := commands.Dispatch(&req.cmd)
@@ -73,6 +98,7 @@ func handleConnection(conn net.Conn, commandCh chan<- CommandRequest) {
 	defer conn.Close()
 	log.Printf("client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
 	for {
 		value, err := core.Decode(reader)
 		if err != nil {
@@ -99,10 +125,17 @@ func handleConnection(conn net.Conn, commandCh chan<- CommandRequest) {
 		}
 		reply := <-replych
 		log.Printf("reply: %q", string(reply))
-
-		if _, err := conn.Write(reply); err != nil {
+		if _, err := writer.Write(reply); err != nil {
+			log.Printf("Writing")
 			log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
 			return
+		}
+		if reader.Buffered() == 0 {
+			log.Printf("Flushing")
+			if err := writer.Flush(); err != nil {
+				log.Printf("flush error to %s: %v \n", conn.RemoteAddr(), err)
+				return
+			}
 		}
 	}
 }

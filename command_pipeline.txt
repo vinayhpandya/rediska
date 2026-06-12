@@ -1,0 +1,4 @@
+SET name Vinay
+SET surname Pandya
+SET age 35
+GET name

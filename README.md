@@ -73,3 +73,10 @@ Add AOF functionality in rediska
 ```bash
  go run . --host 127.0.0.1 --port 7379 --appendOnly=true --appendOnlyFile=/tmp/tempfile.aof
 ```
+
+## Milestone 6
+Add Active expiry and lazy expiry for expired objects
+
+1. Allow server to delete expired keys
+2. Allow lazy expiry on keys which are deleted
+3. TODO Add Compaction to aof for expire as well
