@@ -1,12 +1,15 @@
 package store
 
 import (
+	"fmt"
+	"strconv"
 	"time"
 	// sync is gone — no locks needed
 )
 
 type entry struct {
-	value     string
+	encoding  Encoding
+	value     any
 	expiresAt time.Time
 }
 
@@ -28,12 +31,64 @@ func New() *Store {
 // Never access this directly — always go through the command worker.
 var Default = New()
 
+func detectEncoding(value string) Encoding {
+
+	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return EncodingINT
+	}
+	if len(value) <= 44 {
+		return EncodingEMBSTR
+	}
+	return EncodingRAW
+}
+
 func (s *Store) Set(key, value string, ttl time.Duration) {
 	var expiresAt time.Time
 	if ttl > 0 {
 		expiresAt = s.now().Add(ttl)
 	}
-	s.data[key] = entry{value: value, expiresAt: expiresAt}
+	enc := detectEncoding(value)
+	var storedValue any
+	switch enc {
+	case EncodingINT:
+		n, _ := strconv.ParseInt(value, 10, 64)
+		storedValue = n
+	case EncodingEMBSTR, EncodingRAW:
+		storedValue = value
+	}
+	s.data[key] = entry{
+		encoding:  enc,
+		value:     storedValue,
+		expiresAt: expiresAt,
+	}
+}
+
+func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
+	e, ok := s.data[key]
+	if !ok {
+		return 0, false, nil, time.Time{}
+	}
+	if s.isExpired(e) {
+		delete(s.data, key)
+		return 0, false, nil, time.Time{}
+	}
+	if e.encoding != EncodingINT {
+		return 0, true, fmt.Errorf("ERR value is not an integer or out of range"), time.Time{}
+	}
+	return e.value.(int64), true, nil, e.expiresAt
+}
+func (s *Store) GetEncoding(key string) (Encoding, bool) {
+	value, ok := s.data[key]
+	if !ok {
+		return 0, false
+	}
+	if s.isExpired(value) {
+		// inline deletion — no separate deleteIfExpired needed
+		// previously this caused a deadlock by trying to acquire a lock already held
+		delete(s.data, key)
+		return 0, false
+	}
+	return value.encoding, true
 }
 
 func (s *Store) Get(key string) (string, bool) {
@@ -47,7 +102,13 @@ func (s *Store) Get(key string) (string, bool) {
 		delete(s.data, key)
 		return "", false
 	}
-	return e.value, true
+	switch e.encoding {
+	case EncodingINT:
+		return strconv.FormatInt(e.value.(int64), 10), true
+	case EncodingRAW, EncodingEMBSTR:
+		return e.value.(string), true
+	}
+	return "", false
 }
 
 func (s *Store) TTL(key string) int64 {
