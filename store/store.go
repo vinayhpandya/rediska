@@ -43,6 +43,10 @@ func detectEncoding(value string) Encoding {
 }
 
 func (s *Store) Set(key, value string, ttl time.Duration) {
+	_, exists := s.data[key]
+	if !exists {
+		UpdateDbStat(0, "keys", 1)
+	}
 	var expiresAt time.Time
 	if ttl > 0 {
 		expiresAt = s.now().Add(ttl)
@@ -99,6 +103,7 @@ func (s *Store) Get(key string) (string, bool) {
 	if s.isExpired(e) {
 		// inline deletion — no separate deleteIfExpired needed
 		// previously this caused a deadlock by trying to acquire a lock already held
+		UpdateDbStat(0, "keys", -1)
 		delete(s.data, key)
 		return "", false
 	}
@@ -122,6 +127,7 @@ func (s *Store) TTL(key string) int64 {
 	remaining := e.expiresAt.Sub(s.now())
 	if remaining <= 0 {
 		// inline deletion — same fix as Get
+		UpdateDbStat(0, "keys", -1)
 		delete(s.data, key)
 		return -2
 	}

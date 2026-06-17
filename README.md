@@ -80,3 +80,20 @@ Add Active expiry and lazy expiry for expired objects
 1. Allow server to delete expired keys
 2. Allow lazy expiry on keys which are deleted
 3. TODO Add Compaction to aof for expire as well
+
+## Milestone 7
+Change redis encoding and add INCR
+
+1. Add Object encoding
+2. Add INCR functionality
+
+### Milestone 7.1
+
+Add INFO command and monitoring
+
+1. Add tracing and prometheus
+2. Add redis exporter
+
+Redis exporter will call INFO on redis cli and get keyspace details
+and export it to prometheus
+Grafana will render the prometheus data
