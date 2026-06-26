@@ -10,6 +10,10 @@ type AOF struct {
 	file *os.File
 }
 
+func (a *AOF) Sync() error {
+	return a.file.Sync()
+}
+
 func NewAOF(path string) (*AOF, error) {
 	f, ok := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if ok != nil {

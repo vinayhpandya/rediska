@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"rediska/config"
 	"rediska/server"
+	"syscall"
 )
 
 func setUpFlags() {
@@ -20,8 +24,10 @@ func setUpFlags() {
 }
 func main() {
 	setUpFlags()
+	context, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	fmt.Printf("Starting Rediska on host %v and port %v  and append file %v\n", config.Host, config.Port, config.AppendOnlyFile)
-	if err := server.Run(config.Host, config.Port, config.AppendOnly, config.AppendOnlyFile); err != nil {
+	if err := server.Run(context, config.Host, config.Port, config.AppendOnly, config.AppendOnlyFile); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }

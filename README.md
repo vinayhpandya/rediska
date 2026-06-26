@@ -106,3 +106,12 @@ Add DEBUG command (for memory) and implement approximate LRU
    is always under `maxmemory`
 2. Verified that there is no OOM error once we hit 1MB under lru
 3. Tested no-eviction policy as well
+
+### Milestone 8
+
+Implemented graceful shutdown redis
+
+1. Implemented graceful shutdown for redis with filesync for aof
+2. All inflight requests will be completed within a deadline
+3. All requests will be tracked using waitgroups to monitor in fligt
+   requests

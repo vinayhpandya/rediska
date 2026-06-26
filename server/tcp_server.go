@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"rediska/commands"
 	"rediska/core"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -17,16 +19,19 @@ type CommandRequest struct {
 	replych chan []byte
 }
 
-func Run(host string, port int, appendOnly bool, appendFilename string) error {
+const shutdownPollInterval = 500 * time.Millisecond
+
+func Run(ctx context.Context, host string, port int, appendOnly bool, appendFilename string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
+	var aof *core.AOF
 	fmt.Println("Append file name is ", appendFilename)
 	if appendOnly {
 		fmt.Println("Running rediska in append only file mode")
-		aof, error := core.NewAOF(appendFilename)
-		if error != nil {
-			return fmt.Errorf("init AOF: %w", error)
+		a, err := core.NewAOF(appendFilename)
+		if err != nil {
+			return fmt.Errorf("init AOF: %w", err)
 		}
-		defer aof.Close()
+		aof = a
 		commands.SetAOF(aof)
 		log.Println("Recovering from appendOnly file")
 		if err := aof.Recover(func(args []string) {
@@ -39,75 +44,134 @@ func Run(host string, port int, appendOnly bool, appendFilename string) error {
 			}
 			commands.Dispatch(cmd)
 		}); err != nil {
+			aof.Close()
 			return fmt.Errorf("Error during AOF recovery: %w", err)
 		}
 	}
-	listener, error := net.Listen("tcp", addr)
-	if error != nil {
-		log.Fatalf("Error connecting to host %v \n", host)
-		return fmt.Errorf("listen on %s: %w", addr, error)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		if aof != nil {
+			aof.Close()
+		}
+		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	defer listener.Close()
+	go func() {
+		<-ctx.Done()
+		log.Println("shutdown signal received")
+		listener.Close()
+	}()
 
 	commandCh := make(chan CommandRequest, 256)
+	workerdone := make(chan struct{})
 
-	go dispatchWorker(commandCh)
+	go func() {
+		dispatchWorker(commandCh)
+		close(workerdone)
+	}()
 
-	go startActiveExpiry(commandCh)
+	var producers sync.WaitGroup
+	producers.Add(1)
+	go startActiveExpiry(ctx, commandCh, &producers)
 	fmt.Printf("rediska is listening on %s \n", addr)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if ctx.Err() != nil {
+				break
+			}
 			log.Printf("accept error: %v \n", err)
+
 			continue
 		}
-		go handleConnection(conn, commandCh)
+		producers.Add(1)
+		go func(c net.Conn) {
+			defer producers.Done()
+			handleConnection(ctx, c, commandCh)
+		}(conn)
+		// go handleConnection(conn, commandCh)
 	}
+	// Shutdown procedure
+	producers.Wait()
+	close(commandCh)
+	<-workerdone
+	log.Println("command pipeline drained")
+
+	if aof != nil {
+		log.Println("flushing append-only file to disk (fsync)")
+		if err := aof.Sync(); err != nil {
+			log.Printf("AOF sync error: %v", err)
+		}
+		if err := aof.Close(); err != nil {
+			log.Printf("AOF close error: %v", err)
+		}
+	}
+	log.Println("shutdown complete")
+	return nil
+
 }
 
-func startActiveExpiry(commandCh chan<- CommandRequest) {
+func startActiveExpiry(ctx context.Context, commandCh chan<- CommandRequest, wg *sync.WaitGroup) {
+	defer wg.Done()
 	ticker := time.NewTicker(100 * time.Millisecond)
-	for range ticker.C {
-		for {
-			replyCh := make(chan []byte, 1)
-			commandCh <- CommandRequest{
-				cmd:     commands.Command{Name: "_EXPIRY"},
-				replych: replyCh,
-			}
-			reply := <-replyCh
-			deletedKeys, err := core.DecodeInteger(reply)
-			if err != nil {
-				break
-			}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for {
+				replyCh := make(chan []byte, 1)
+				select {
+				case commandCh <- CommandRequest{
+					cmd:     commands.Command{Name: "_EXPIRY"},
+					replych: replyCh,
+				}:
+				case <-ctx.Done():
+					return
+				}
+				reply := <-replyCh
+				deletedKeys, err := core.DecodeInteger(reply)
+				if err != nil {
+					break
+				}
 
-			if deletedKeys < 5 {
-				break
+				if deletedKeys < 5 {
+					break
+				}
+
 			}
 
 		}
 	}
-
 }
+
 func dispatchWorker(commandCh <-chan CommandRequest) {
 	for req := range commandCh {
 		reply := commands.Dispatch(&req.cmd)
 		req.replych <- reply
 	}
 }
-func handleConnection(conn net.Conn, commandCh chan<- CommandRequest) {
+func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- CommandRequest) {
 	defer conn.Close()
 	log.Printf("client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 	for {
-		value, err := core.Decode(reader)
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("read error from %s: %v \n", conn.RemoteAddr(), err)
-			}
-			log.Printf("client disconnected: %s \n", conn.RemoteAddr())
+		if ctx.Err() != nil {
 			return
 		}
+		conn.SetReadDeadline(time.Now().Add(shutdownPollInterval))
+		value, err := core.Decode(reader)
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue // our 500ms poll fired, no command yet — loop back (and re-check ctx at top)
+			}
+			if err != io.EOF {
+				log.Printf("read error from %s: %v", conn.RemoteAddr(), err)
+			}
+			log.Printf("client disconnected: %s", conn.RemoteAddr())
+			return
+		}
+		conn.SetReadDeadline(time.Time{})
 		command, err := commands.ParseCommand(value)
 		if err != nil {
 			log.Printf("parse error from %s: %v", conn.RemoteAddr(), err)
