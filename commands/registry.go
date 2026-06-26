@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"rediska/config"
 	"rediska/core"
 	"rediska/store"
 )
@@ -36,7 +37,17 @@ func Dispatch(cmd *Command) []byte {
 		return core.EncodeError(fmt.Sprintf("ERR unknown command '%s'", cmd.Name))
 	}
 	reply := handler(cmd.Args)
-
+	if writeCommands[cmd.Name] && config.MaxMemory > 0 {
+		maxBytes := int64(config.MaxMemory) << 20
+		switch config.MaxMemoryPolicy {
+		case "allkeys-lru":
+			store.Default.PerformEvictions(config.MaxMemorySamples, maxBytes)
+		case "noeviction":
+		}
+		if store.Default.OverMemory(maxBytes) { // still over after the switch → reject
+			return core.EncodeError("OOM command not allowed when used memory > 'maxmemory'.")
+		}
+	}
 	if aof != nil && writeCommands[cmd.Name] {
 		fullCmd := append([]string{cmd.Name}, cmd.Args...)
 		if err := aof.Write(fullCmd); err != nil {

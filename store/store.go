@@ -11,19 +11,23 @@ type entry struct {
 	encoding  Encoding
 	value     any
 	expiresAt time.Time
+	lru       uint32 // 24-bit LRU clock stamp; see lru.go
 }
 
 // Store is not thread-safe.
 // All access must go through the single command worker in server.go.
 type Store struct {
-	data map[string]entry
-	now  func() time.Time // injectable for testing e.g. fake clock
+	data       map[string]entry
+	now        func() time.Time    // injectable for testing e.g. fake clock
+	usedMemory int64               // running byte estimate, kept in sync by Set/removeKey
+	evPool     []evictionCandidate // eviction pool, persists across cycles
 }
 
 func New() *Store {
 	return &Store{
-		data: make(map[string]entry),
-		now:  time.Now,
+		data:   make(map[string]entry),
+		now:    time.Now,
+		evPool: make([]evictionCandidate, 0, EvictionPoolSize),
 	}
 }
 
@@ -43,9 +47,12 @@ func detectEncoding(value string) Encoding {
 }
 
 func (s *Store) Set(key, value string, ttl time.Duration) {
-	_, exists := s.data[key]
+	old, exists := s.data[key]
 	if !exists {
 		UpdateDbStat(0, "keys", 1)
+	} else {
+		// overwriting: drop the old size before adding the new one
+		s.usedMemory -= entrySize(key, old)
 	}
 	var expiresAt time.Time
 	if ttl > 0 {
@@ -60,11 +67,14 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 	case EncodingEMBSTR, EncodingRAW:
 		storedValue = value
 	}
-	s.data[key] = entry{
+	e := entry{
 		encoding:  enc,
 		value:     storedValue,
 		expiresAt: expiresAt,
+		lru:       s.lruClock(), // a write counts as an access
 	}
+	s.data[key] = e
+	s.usedMemory += entrySize(key, e)
 }
 
 func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
@@ -73,23 +83,27 @@ func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
 		return 0, false, nil, time.Time{}
 	}
 	if s.isExpired(e) {
-		delete(s.data, key)
+		s.removeKey(key)
 		return 0, false, nil, time.Time{}
 	}
+	// stamp recency: the key was accessed
+	e.lru = s.lruClock()
+	s.data[key] = e // reassign to persist the stamp (value-type map)
 	if e.encoding != EncodingINT {
 		return 0, true, fmt.Errorf("ERR value is not an integer or out of range"), time.Time{}
 	}
 	return e.value.(int64), true, nil, e.expiresAt
 }
+
+// GetEncoding is a metadata read (used by OBJECT ENCODING) and deliberately
+// does NOT bump recency — inspecting a key shouldn't make it look hot.
 func (s *Store) GetEncoding(key string) (Encoding, bool) {
 	value, ok := s.data[key]
 	if !ok {
 		return 0, false
 	}
 	if s.isExpired(value) {
-		// inline deletion — no separate deleteIfExpired needed
-		// previously this caused a deadlock by trying to acquire a lock already held
-		delete(s.data, key)
+		s.removeKey(key)
 		return 0, false
 	}
 	return value.encoding, true
@@ -101,12 +115,12 @@ func (s *Store) Get(key string) (string, bool) {
 		return "", false
 	}
 	if s.isExpired(e) {
-		// inline deletion — no separate deleteIfExpired needed
-		// previously this caused a deadlock by trying to acquire a lock already held
-		UpdateDbStat(0, "keys", -1)
-		delete(s.data, key)
+		s.removeKey(key)
 		return "", false
 	}
+	// stamp recency: the key was accessed
+	e.lru = s.lruClock()
+	s.data[key] = e // reassign to persist the stamp (value-type map)
 	switch e.encoding {
 	case EncodingINT:
 		return strconv.FormatInt(e.value.(int64), 10), true
@@ -116,6 +130,7 @@ func (s *Store) Get(key string) (string, bool) {
 	return "", false
 }
 
+// TTL is a metadata read and does NOT bump recency, matching Redis.
 func (s *Store) TTL(key string) int64 {
 	e, ok := s.data[key]
 	if !ok {
@@ -126,9 +141,7 @@ func (s *Store) TTL(key string) int64 {
 	}
 	remaining := e.expiresAt.Sub(s.now())
 	if remaining <= 0 {
-		// inline deletion — same fix as Get
-		UpdateDbStat(0, "keys", -1)
-		delete(s.data, key)
+		s.removeKey(key)
 		return -2
 	}
 	return (remaining.Milliseconds() + 500) / 1000
@@ -140,6 +153,16 @@ func (s *Store) isExpired(e entry) bool {
 	return !e.expiresAt.IsZero() && !s.now().Before(e.expiresAt)
 }
 
-// deleteIfExpired is removed entirely.
-// it was causing deadlocks by trying to acquire a lock already held by Get/TTL.
-// deletion is now inlined at the point where expiry is detected.
+func (s *Store) UsedMemory() int64 {
+	return s.usedMemory
+}
+
+// KeyCount returns the number of keys currently in the store, including any
+// that are logically expired but not yet removed.
+func (s *Store) KeyCount() int {
+	return len(s.data)
+}
+
+// Note: all deletions now route through removeKey (in lru.go) so the
+// usedMemory counter and the keys stat stay consistent. The old inline
+// delete(s.data, key) calls have been replaced.

@@ -97,3 +97,12 @@ Add INFO command and monitoring
 Redis exporter will call INFO on redis cli and get keyspace details
 and export it to prometheus
 Grafana will render the prometheus data
+
+### Milestone 7.2
+
+Add DEBUG command (for memory) and implement approximate LRU
+
+1. Verified with load testing by monitoring garafana that the memory
+   is always under `maxmemory`
+2. Verified that there is no OOM error once we hit 1MB under lru
+3. Tested no-eviction policy as well
