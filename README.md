@@ -115,3 +115,4 @@ Implemented graceful shutdown redis
 2. All inflight requests will be completed within a deadline
 3. All requests will be tracked using waitgroups to monitor in fligt
    requests
+4. TODO RDB sync snapshots
