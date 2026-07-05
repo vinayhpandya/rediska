@@ -31,6 +31,10 @@ func init() {
 		return core.EncodeInteger(int64(deleted))
 	})
 }
+func IsKnownCommand(name string) bool {
+	_, ok := commands[name]
+	return ok
+}
 func Dispatch(cmd *Command) []byte {
 	handler, ok := commands[cmd.Name]
 	if !ok {
@@ -56,4 +60,12 @@ func Dispatch(cmd *Command) []byte {
 	}
 	return reply
 
+}
+
+func DispatchBatch(cmd []*Command) []byte {
+	replies := make([][]byte, len(cmd))
+	for i, c := range cmd {
+		replies[i] = Dispatch(c)
+	}
+	return core.EncodeRawArray(replies)
 }

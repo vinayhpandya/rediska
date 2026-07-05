@@ -23,6 +23,14 @@ func EncodeError(s string) []byte {
 	return []byte("-" + s + "\r\n")
 }
 
+func EncodeRawArray(items [][]byte) []byte {
+	out := []byte(fmt.Sprintf("*%d\r\n", len(items)))
+	for _, item := range items {
+		out = append(out, item...)
+	}
+	return out
+}
+
 func EncodeBulkString(s string) []byte {
 	return []byte("$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n")
 }

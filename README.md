@@ -107,7 +107,7 @@ Add DEBUG command (for memory) and implement approximate LRU
 2. Verified that there is no OOM error once we hit 1MB under lru
 3. Tested no-eviction policy as well
 
-### Milestone 8
+## Milestone 8
 
 Implemented graceful shutdown redis
 
@@ -116,3 +116,10 @@ Implemented graceful shutdown redis
 3. All requests will be tracked using waitgroups to monitor in fligt
    requests
 4. TODO RDB sync snapshots
+
+## Milestone 9
+Implemented transactions
+
+1. Implemented multi and exec commands for transactions
+2. Implemented DISCARD as well
+3. Need to verify with AOF files as well

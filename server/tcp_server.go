@@ -16,6 +16,7 @@ import (
 
 type CommandRequest struct {
 	cmd     commands.Command
+	batch   []*commands.Command
 	replych chan []byte
 }
 
@@ -146,7 +147,12 @@ func startActiveExpiry(ctx context.Context, commandCh chan<- CommandRequest, wg 
 
 func dispatchWorker(commandCh <-chan CommandRequest) {
 	for req := range commandCh {
-		reply := commands.Dispatch(&req.cmd)
+		var reply []byte
+		if req.batch != nil {
+			reply = commands.DispatchBatch(req.batch)
+		} else {
+			reply = commands.Dispatch(&req.cmd)
+		}
 		req.replych <- reply
 	}
 }
@@ -155,6 +161,7 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 	log.Printf("client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
+	tx := newTxState()
 	for {
 		if ctx.Err() != nil {
 			return
@@ -181,13 +188,20 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 			}
 			continue
 		}
-		log.Printf("received command: %s args=%v", command.Name, command.Args)
-		replych := make(chan []byte, 1)
-		commandCh <- CommandRequest{
-			cmd:     *command,
-			replych: replych,
+		action, txReply, batch := tx.handle(command)
+		var reply []byte
+		switch action {
+		case actionReply:
+			reply = txReply
+		case actionExec:
+			replych := make(chan []byte, 1)
+			commandCh <- CommandRequest{batch: batch, replych: replych}
+			reply = <-replych
+		case actionPassthrough:
+			replych := make(chan []byte, 1)
+			commandCh <- CommandRequest{cmd: *command, replych: replych}
+			reply = <-replych
 		}
-		reply := <-replych
 		log.Printf("reply: %q", string(reply))
 		if _, err := writer.Write(reply); err != nil {
 			log.Printf("Writing")

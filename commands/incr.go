@@ -18,7 +18,7 @@ func handleIncr(args []string) []byte {
 	key := args[0]
 	n, exists, err, expiry := store.Default.GetInt(key)
 	if !exists {
-		return core.EncodeError("-1")
+		n = 0
 	}
 	if err != nil {
 		return core.EncodeError("ERR while incrementing")
