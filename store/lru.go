@@ -40,9 +40,9 @@ func entrySize(key string, e entry) int64 {
 	switch e.encoding {
 	case EncodingINT:
 		valueSize = 8
-	default:
-		if str, ok := e.value.(string); ok {
-			valueSize = len(str)
+	case EncodingEMBSTR, EncodingRAW:
+		if e.strVal != nil {
+			valueSize = e.strVal.Cap()
 		}
 	}
 	return int64(len(key) + valueSize + entryOverhead)

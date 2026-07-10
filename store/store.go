@@ -4,12 +4,19 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"rediska/core/sds"
 	// sync is gone — no locks needed
 )
 
+// entry is a tagged union: `encoding` says which of intVal/strVal is
+// actually populated. This avoids boxing values into `any` (which costs a
+// hidden heap allocation for intVal on every Set, plus a 16-byte interface
+// header) in favor of plain fields the compiler can check directly.
 type entry struct {
 	encoding  Encoding
-	value     any
+	intVal    int64
+	strVal    *sds.SDS
 	expiresAt time.Time
 	lru       uint32 // 24-bit LRU clock stamp; see lru.go
 }
@@ -36,7 +43,6 @@ func New() *Store {
 var Default = New()
 
 func detectEncoding(value string) Encoding {
-
 	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
 		return EncodingINT
 	}
@@ -59,22 +65,53 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 		expiresAt = s.now().Add(ttl)
 	}
 	enc := detectEncoding(value)
-	var storedValue any
-	switch enc {
-	case EncodingINT:
-		n, _ := strconv.ParseInt(value, 10, 64)
-		storedValue = n
-	case EncodingEMBSTR, EncodingRAW:
-		storedValue = value
-	}
 	e := entry{
 		encoding:  enc,
-		value:     storedValue,
 		expiresAt: expiresAt,
 		lru:       s.lruClock(), // a write counts as an access
 	}
+	switch enc {
+	case EncodingINT:
+		n, _ := strconv.ParseInt(value, 10, 64)
+		e.intVal = n
+	case EncodingEMBSTR, EncodingRAW:
+		e.strVal = sds.New(value)
+	}
 	s.data[key] = e
 	s.usedMemory += entrySize(key, e)
+}
+
+// Append implements Redis's APPEND: creates the key if it doesn't exist
+// (identical to a SET with no TTL), otherwise appends to the existing
+// value. An INT-encoded key is converted to its string form first and
+// becomes RAW-encoded afterward — same as real Redis. Returns the new
+// total length, matching Redis's APPEND reply.
+func (s *Store) Append(key, value string) int64 {
+	old, exists := s.data[key]
+	if !exists {
+		s.Set(key, value, 0)
+		return int64(len(value))
+	}
+
+	s.usedMemory -= entrySize(key, old)
+
+	var buf *sds.SDS
+	if old.encoding == EncodingINT {
+		buf = sds.New(strconv.FormatInt(old.intVal, 10))
+	} else {
+		buf = old.strVal
+	}
+	buf.AppendString(value)
+
+	e := entry{
+		encoding:  EncodingRAW,
+		strVal:    buf,
+		expiresAt: old.expiresAt, // APPEND preserves existing TTL
+		lru:       s.lruClock(),
+	}
+	s.data[key] = e
+	s.usedMemory += entrySize(key, e)
+	return int64(buf.Len())
 }
 
 func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
@@ -92,7 +129,7 @@ func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
 	if e.encoding != EncodingINT {
 		return 0, true, fmt.Errorf("ERR value is not an integer or out of range"), time.Time{}
 	}
-	return e.value.(int64), true, nil, e.expiresAt
+	return e.intVal, true, nil, e.expiresAt
 }
 
 // GetEncoding is a metadata read (used by OBJECT ENCODING) and deliberately
@@ -123,9 +160,9 @@ func (s *Store) Get(key string) (string, bool) {
 	s.data[key] = e // reassign to persist the stamp (value-type map)
 	switch e.encoding {
 	case EncodingINT:
-		return strconv.FormatInt(e.value.(int64), 10), true
+		return strconv.FormatInt(e.intVal, 10), true
 	case EncodingRAW, EncodingEMBSTR:
-		return e.value.(string), true
+		return e.strVal.String(), true
 	}
 	return "", false
 }
