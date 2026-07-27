@@ -130,3 +130,4 @@ Implemented transactions
 2. Implement dense encoding
 3. Implement PFCOUNT, PFMERGE, PFADD
 4. TODO -> Implement sparse encoding for better efficiency
+5. Implemented sparse and dense encoding

@@ -165,6 +165,8 @@ func (s *Store) Get(key string) (string, bool) {
 		return strconv.FormatInt(e.intVal, 10), true
 	case EncodingRAW, EncodingEMBSTR:
 		return e.strVal.String(), true
+	case EncodingHLL:
+		return "", false
 	}
 	return "", false
 }
@@ -204,8 +206,8 @@ func (s *Store) KeyCount() int {
 
 func (s *Store) PFAdd(key string, values ...string) (changed bool) {
 	e, exists := s.data[key]
-	if !exists || e.encoding != EncodingHLLDense {
-		e = entry{encoding: EncodingHLLDense, hllVal: hll.New(), lru: s.lruClock()}
+	if !exists || e.encoding != EncodingHLL {
+		e = entry{encoding: EncodingHLL, hllVal: hll.New(), lru: s.lruClock()}
 	}
 	for _, v := range values {
 		if e.hllVal.Add([]byte(v)) {
@@ -218,7 +220,7 @@ func (s *Store) PFAdd(key string, values ...string) (changed bool) {
 
 func (s *Store) PFCount(key string) int64 {
 	e, ok := s.data[key]
-	if !ok || e.encoding != EncodingHLLDense {
+	if !ok || e.encoding != EncodingHLL {
 		return 0
 	}
 	return int64(e.hllVal.Count())
@@ -230,7 +232,7 @@ func (s *Store) PFMerge(dest string, sources ...string) {
 	allKeys := append([]string{dest}, sources...)
 	for _, key := range allKeys {
 		e, ok := s.data[key]
-		if !ok || e.encoding != EncodingHLLDense {
+		if !ok || e.encoding != EncodingHLL {
 			continue
 		}
 		acc.Merge(e.hllVal)
@@ -244,7 +246,7 @@ func (s *Store) PFMerge(dest string, sources ...string) {
 	}
 
 	e := entry{
-		encoding: EncodingHLLDense,
+		encoding: EncodingHLL,
 		hllVal:   acc,
 		lru:      s.lruClock(),
 		// PFMERGE does not preserve dest's old TTL -- a fresh union

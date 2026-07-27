@@ -6,5 +6,5 @@ const (
 	EncodingINT Encoding = iota
 	EncodingEMBSTR
 	EncodingRAW
-	EncodingHLLDense
+	EncodingHLL
 )
