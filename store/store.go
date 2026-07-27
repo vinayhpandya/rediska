@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"rediska/core/sds"
+	"rediska/store/hll"
 	// sync is gone — no locks needed
 )
 
@@ -17,6 +18,7 @@ type entry struct {
 	encoding  Encoding
 	intVal    int64
 	strVal    *sds.SDS
+	hllVal    *hll.HLL
 	expiresAt time.Time
 	lru       uint32 // 24-bit LRU clock stamp; see lru.go
 }
@@ -198,6 +200,58 @@ func (s *Store) UsedMemory() int64 {
 // that are logically expired but not yet removed.
 func (s *Store) KeyCount() int {
 	return len(s.data)
+}
+
+func (s *Store) PFAdd(key string, values ...string) (changed bool) {
+	e, exists := s.data[key]
+	if !exists || e.encoding != EncodingHLLDense {
+		e = entry{encoding: EncodingHLLDense, hllVal: hll.New(), lru: s.lruClock()}
+	}
+	for _, v := range values {
+		if e.hllVal.Add([]byte(v)) {
+			changed = true
+		}
+	}
+	s.data[key] = e
+	return changed
+}
+
+func (s *Store) PFCount(key string) int64 {
+	e, ok := s.data[key]
+	if !ok || e.encoding != EncodingHLLDense {
+		return 0
+	}
+	return int64(e.hllVal.Count())
+}
+
+func (s *Store) PFMerge(dest string, sources ...string) {
+	acc := hll.New()
+
+	allKeys := append([]string{dest}, sources...)
+	for _, key := range allKeys {
+		e, ok := s.data[key]
+		if !ok || e.encoding != EncodingHLLDense {
+			continue
+		}
+		acc.Merge(e.hllVal)
+	}
+
+	old, existed := s.data[dest]
+	if existed {
+		s.usedMemory -= entrySize(dest, old)
+	} else {
+		UpdateDbStat(0, "keys", 1)
+	}
+
+	e := entry{
+		encoding: EncodingHLLDense,
+		hllVal:   acc,
+		lru:      s.lruClock(),
+		// PFMERGE does not preserve dest's old TTL -- a fresh union
+		// value, like a plain overwrite via Set.
+	}
+	s.data[dest] = e
+	s.usedMemory += entrySize(dest, e)
 }
 
 // Note: all deletions now route through removeKey (in lru.go) so the

@@ -123,3 +123,10 @@ Implemented transactions
 1. Implemented multi and exec commands for transactions
 2. Implemented DISCARD as well
 3. Need to verify with AOF files as well
+
+## Milestone 10
+
+1. Implement hyperloglog
+2. Implement dense encoding
+3. Implement PFCOUNT, PFMERGE, PFADD
+4. TODO -> Implement sparse encoding for better efficiency
