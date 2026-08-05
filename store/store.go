@@ -30,6 +30,7 @@ type Store struct {
 	now        func() time.Time    // injectable for testing e.g. fake clock
 	usedMemory int64               // running byte estimate, kept in sync by Set/removeKey
 	evPool     []evictionCandidate // eviction pool, persists across cycles
+	policy     string              // active maxmemory-policy; see SetPolicy
 }
 
 func New() *Store {
@@ -37,7 +38,32 @@ func New() *Store {
 		data:   make(map[string]entry),
 		now:    time.Now,
 		evPool: make([]evictionCandidate, 0, EvictionPoolSize),
+		policy: "noeviction",
 	}
+}
+
+func (s *Store) SetPolicy(policy string) {
+	s.policy = policy
+}
+
+func (s *Store) isLFU() bool {
+	return s.policy == "allkeys-lfu" || s.policy == "volatile-lfu"
+}
+
+// stampNew returns the lru field value for a brand-new entry: either an
+// LRU clock stamp or a fresh LFU packed field, depending on policy.
+func (s *Store) stampNew() uint32 {
+	if s.isLFU() {
+		return lfuNew(s.lfuClock())
+	}
+	return s.lruClock()
+}
+
+func (s *Store) stampAccess(current uint32) uint32 {
+	if s.isLFU() {
+		return lfuTouch(current, s.lfuClock())
+	}
+	return s.lruClock()
 }
 
 // Default is the global store instance.
@@ -52,6 +78,26 @@ func detectEncoding(value string) Encoding {
 		return EncodingEMBSTR
 	}
 	return EncodingRAW
+}
+
+// GetFreq returns a key's LFU counter (used by OBJECT FREQ), same as real
+// Redis. It's a metadata read and does NOT bump recency. ok is false if
+// the key doesn't exist, and policyOK is false if the active policy isn't
+// an LFU policy -- callers should surface that as a distinct error,
+// mirroring Redis's "An LFU maxmemory policy is not selected" response.
+func (s *Store) GetFreq(key string) (freq uint8, ok bool, policyOK bool) {
+	if !s.isLFU() {
+		return 0, false, false
+	}
+	value, exists := s.data[key]
+	if !exists {
+		return 0, false, true
+	}
+	if s.isExpired(value) {
+		s.removeKey(key)
+		return 0, false, true
+	}
+	return lfuDecodeCounter(value.lru), true, true
 }
 
 func (s *Store) Set(key, value string, ttl time.Duration) {
@@ -70,7 +116,7 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 	e := entry{
 		encoding:  enc,
 		expiresAt: expiresAt,
-		lru:       s.lruClock(), // a write counts as an access
+		lru:       s.stampNew(), // a write counts as an access
 	}
 	switch enc {
 	case EncodingINT:
@@ -109,7 +155,7 @@ func (s *Store) Append(key, value string) int64 {
 		encoding:  EncodingRAW,
 		strVal:    buf,
 		expiresAt: old.expiresAt, // APPEND preserves existing TTL
-		lru:       s.lruClock(),
+		lru:       s.stampAccess(old.lru),
 	}
 	s.data[key] = e
 	s.usedMemory += entrySize(key, e)
@@ -126,7 +172,7 @@ func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
 		return 0, false, nil, time.Time{}
 	}
 	// stamp recency: the key was accessed
-	e.lru = s.lruClock()
+	e.lru = s.stampAccess(e.lru)
 	s.data[key] = e // reassign to persist the stamp (value-type map)
 	if e.encoding != EncodingINT {
 		return 0, true, fmt.Errorf("ERR value is not an integer or out of range"), time.Time{}
@@ -158,7 +204,7 @@ func (s *Store) Get(key string) (string, bool) {
 		return "", false
 	}
 	// stamp recency: the key was accessed
-	e.lru = s.lruClock()
+	e.lru = s.stampAccess(e.lru)
 	s.data[key] = e // reassign to persist the stamp (value-type map)
 	switch e.encoding {
 	case EncodingINT:
@@ -248,7 +294,7 @@ func (s *Store) PFMerge(dest string, sources ...string) {
 	e := entry{
 		encoding: EncodingHLL,
 		hllVal:   acc,
-		lru:      s.lruClock(),
+		lru:      s.stampNew(),
 		// PFMERGE does not preserve dest's old TTL -- a fresh union
 		// value, like a plain overwrite via Set.
 	}

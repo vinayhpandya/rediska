@@ -131,3 +131,8 @@ Implemented transactions
 3. Implement PFCOUNT, PFMERGE, PFADD
 4. TODO -> Implement sparse encoding for better efficiency
 5. Implemented sparse and dense encoding
+
+## Milestone 11
+
+1. Implement LFU
+2. Sampling algorithm set according to redis

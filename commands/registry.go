@@ -44,7 +44,7 @@ func Dispatch(cmd *Command) []byte {
 	if writeCommands[cmd.Name] && config.MaxMemory > 0 {
 		maxBytes := int64(config.MaxMemory) << 20
 		switch config.MaxMemoryPolicy {
-		case "allkeys-lru":
+		case "allkeys-lru", "allkeys-lfu", "volatile-lfu":
 			store.Default.PerformEvictions(config.MaxMemorySamples, maxBytes)
 		case "noeviction":
 		}

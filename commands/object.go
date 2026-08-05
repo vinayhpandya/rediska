@@ -30,6 +30,15 @@ func handleObject(args []string) []byte {
 		case store.EncodingRAW:
 			return core.EncodeBulkString("str")
 		}
+	case "FREQ":
+		freq, ok, policyOK := store.Default.GetFreq(key)
+		if !policyOK {
+			return core.EncodeError("ERR An LFU maxmemory policy is not selected, access frequency not tracked. Please note that when switching between maxmemory policies at runtime LFU and LRU data will take some time to adjust.")
+		}
+		if !ok {
+			return core.EncodeError("ERR no such key")
+		}
+		return core.EncodeInteger(int64(freq))
 	default:
 		return core.EncodeError("ERR unknown subcommand for 'object'")
 	}

@@ -11,11 +11,14 @@ const (
 	entryOverhead      = 64            // estimated per-key bytes (map bucket + headers); tune later
 )
 
-// evictionCandidate is one slot in the eviction pool: a key plus the idle
-// time it had when it was last sampled.
+// evictionCandidate is one slot in the eviction pool: a key plus its
+// evictability score at the time it was last sampled. Higher score =
+// more evictable. Under LRU that's the idle time (ticks since last
+// access); under LFU it's derived from the access-frequency counter
+// (colder key = lower counter = higher score). See evictionScore.
 type evictionCandidate struct {
-	key  string
-	idle uint32
+	key   string
+	score uint32
 }
 
 // lruClock returns the current 24-bit clock value, derived from the
@@ -78,34 +81,49 @@ func (s *Store) sampleKeys(n int) []string {
 	return keys
 }
 
+// evictionScore returns a value where higher = more evictable, according
+// to whichever policy is active:
+//   - LRU: idle time (ticks since last access) -- staler is higher.
+//   - LFU: 255 minus the access counter -- colder (lower counter) is
+//     higher, so it sorts and evicts exactly like idle time does, just
+//     driven by frequency instead of recency.
+func (s *Store) evictionScore(e entry) uint32 {
+	if s.isLFU() {
+		counter := lfuDecodeCounter(e.lru)
+		return uint32(255 - counter)
+	}
+	return lruIdle(s.lruClock(), e.lru)
+}
+
 // poolInsert merges one candidate into the pool, which is kept sorted
-// ascending by idle (freshest first, stalest last). The pool is sticky
-// toward staleness: when full, a candidate fresher than every pooled key
-// is dropped, so good (stale) candidates survive across cycles.
-func (s *Store) poolInsert(key string, idle uint32) {
+// ascending by score (least evictable first, most evictable last). The
+// pool is sticky toward high-score candidates: when full, a candidate
+// with a lower score than everything pooled is dropped, so good
+// (evictable) candidates survive across cycles.
+func (s *Store) poolInsert(key string, score uint32) {
 	for i := range s.evPool {
 		if s.evPool[i].key == key {
-			s.evPool[i].idle = idle // refresh an existing entry
+			s.evPool[i].score = score // refresh an existing entry
 			s.sortPool()
 			return
 		}
 	}
-	cand := evictionCandidate{key: key, idle: idle}
+	cand := evictionCandidate{key: key, score: score}
 	if len(s.evPool) < EvictionPoolSize {
 		s.evPool = append(s.evPool, cand)
 		s.sortPool()
 		return
 	}
-	if idle <= s.evPool[0].idle {
-		return // fresher than everything pooled; not worth keeping
+	if score <= s.evPool[0].score {
+		return // less evictable than everything pooled; not worth keeping
 	}
-	s.evPool[0] = cand // displace the freshest pooled candidate
+	s.evPool[0] = cand // displace the least-evictable pooled candidate
 	s.sortPool()
 }
 
 func (s *Store) sortPool() {
 	sort.Slice(s.evPool, func(i, j int) bool {
-		return s.evPool[i].idle < s.evPool[j].idle
+		return s.evPool[i].score < s.evPool[j].score
 	})
 }
 
@@ -122,10 +140,9 @@ func (s *Store) PerformEvictions(samples int, maxBytes int64) {
 		if len(s.data) == 0 {
 			return // nothing left to free
 		}
-		clock := s.lruClock()
 		for _, k := range s.sampleKeys(samples) {
 			e := s.data[k]
-			s.poolInsert(k, lruIdle(clock, e.lru))
+			s.poolInsert(k, s.evictionScore(e))
 		}
 		// Evict from the stale end of the pool, dropping slots whose keys
 		// have since disappeared until we hit one that still exists.

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"rediska/config"
 	"rediska/server"
+	"rediska/store"
 	"syscall"
 )
 
@@ -20,10 +21,14 @@ func setUpFlags() {
 	flag.IntVar(&config.MaxMemory, "maxmemory", 0, "Maximum memory in megabytes for this server")
 	flag.StringVar(&config.MaxMemoryPolicy, "maxmemory-policy", "noeviction", "Eviction policy to trigger")
 	flag.IntVar(&config.MaxMemorySamples, "maxmemory-samples", 5, "Samples to use for eviction policy")
+	flag.IntVar(&config.LFULogFactor, "lfu-log-factor", 10, "Controls how quickly the LFU counter grows (higher = slower growth)")
+	flag.IntVar(&config.LFUDecayTime, "lfu-decay-time", 1, "Minutes of idle time per LFU counter decay step")
 	flag.Parse()
 }
 func main() {
 	setUpFlags()
+	store.Default.SetPolicy(config.MaxMemoryPolicy)
+	store.SetLFUParams(config.LFULogFactor, config.LFUDecayTime)
 	context, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	fmt.Printf("Starting Rediska on host %v and port %v  and append file %v\n", config.Host, config.Port, config.AppendOnlyFile)
