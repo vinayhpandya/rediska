@@ -69,3 +69,17 @@ func DispatchBatch(cmd []*Command) []byte {
 	}
 	return core.EncodeRawArray(replies)
 }
+
+// DispatchPipeline runs each command in order and returns their replies
+// concatenated back-to-back -- exactly as if each had been dispatched and
+// written individually, one at a time. Unlike DispatchBatch (used for
+// MULTI/EXEC, which needs one array-wrapped reply representing the whole
+// transaction), pipelined commands each need their own independent,
+// individually-parseable reply, so no outer array framing is added here.
+func DispatchPipeline(cmds []*Command) []byte {
+	var out []byte
+	for _, c := range cmds {
+		out = append(out, Dispatch(c)...)
+	}
+	return out
+}

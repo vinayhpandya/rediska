@@ -15,12 +15,21 @@ import (
 )
 
 type CommandRequest struct {
-	cmd     commands.Command
-	batch   []*commands.Command
-	replych chan []byte
+	cmd      commands.Command
+	batch    []*commands.Command // MULTI/EXEC: dispatched as one array-wrapped reply
+	pipeline []*commands.Command // pipelined commands: dispatched as concatenated individual replies
+	replych  chan []byte
 }
 
-const shutdownPollInterval = 500 * time.Millisecond
+// replyChPool reuses reply channels across commands instead of allocating a
+// fresh one per command. Each channel is used for exactly one send/receive
+// cycle (buffered, capacity 1) and is guaranteed drained before it's
+// returned to the pool, so it's always safe to hand out again.
+var replyChPool = sync.Pool{
+	New: func() any {
+		return make(chan []byte, 1)
+	},
+}
 
 func Run(ctx context.Context, host string, port int, appendOnly bool, appendFilename string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
@@ -148,9 +157,12 @@ func startActiveExpiry(ctx context.Context, commandCh chan<- CommandRequest, wg 
 func dispatchWorker(commandCh <-chan CommandRequest) {
 	for req := range commandCh {
 		var reply []byte
-		if req.batch != nil {
+		switch {
+		case req.batch != nil:
 			reply = commands.DispatchBatch(req.batch)
-		} else {
+		case req.pipeline != nil:
+			reply = commands.DispatchPipeline(req.pipeline)
+		default:
 			reply = commands.Dispatch(&req.cmd)
 		}
 		req.replych <- reply
@@ -161,24 +173,84 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 	log.Printf("client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
+	decoder := core.NewDecoder(reader)
 	tx := newTxState()
-	for {
-		if ctx.Err() != nil {
-			return
+
+	// Instead of polling ctx.Err() every loop and re-arming a read deadline
+	// on every command (two syscalls per command just for shutdown support),
+	// one goroutine waits on ctx and closes the conn directly when it fires.
+	// That immediately unblocks the in-flight core.Decode read with an error,
+	// so the loop below exits on its own — no polling needed on the hot path.
+	watcherDone := make(chan struct{})
+	defer close(watcherDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-watcherDone:
 		}
-		conn.SetReadDeadline(time.Now().Add(shutdownPollInterval))
-		value, err := core.Decode(reader)
+	}()
+
+	// dispatchSingle sends one command through commandCh and writes its
+	// reply -- the same fast path as before, no extra allocation beyond
+	// what already existed. Used both for the common non-pipelined case
+	// and as dispatchPipeline's fallback when a "pipeline" turns out to
+	// only have one command in it.
+	dispatchSingle := func(cmd *commands.Command) error {
+		replych := replyChPool.Get().(chan []byte)
+		commandCh <- CommandRequest{cmd: *cmd, replych: replych}
+		reply := <-replych
+		replyChPool.Put(replych)
+		_, err := writer.Write(reply)
+		return err
+	}
+
+	// dispatchPipeline sends a batch of plain commands through commandCh as
+	// ONE request, so a client that pipelines many commands back-to-back
+	// (redis-benchmark -P, or any RESP client pipelining) pays for a single
+	// channel round-trip instead of one per command. Replies come back
+	// concatenated, exactly as if each had been sent individually.
+	dispatchPipeline := func(pipeline []*commands.Command) error {
+		if len(pipeline) == 1 {
+			return dispatchSingle(pipeline[0])
+		}
+		replych := replyChPool.Get().(chan []byte)
+		commandCh <- CommandRequest{pipeline: pipeline, replych: replych}
+		reply := <-replych
+		replyChPool.Put(replych)
+		_, err := writer.Write(reply)
+		return err
+	}
+
+	// handleAction writes the reply for a non-passthrough action (a
+	// transaction-control reply, or an EXEC's batch dispatch). Factored out
+	// so it can be called both for the "current" command and for a command
+	// discovered while accumulating a pipeline (see below).
+	handleAction := func(action txAction, txReply []byte, batch []*commands.Command) error {
+		switch action {
+		case actionReply:
+			_, err := writer.Write(txReply)
+			return err
+		case actionExec:
+			replych := replyChPool.Get().(chan []byte)
+			commandCh <- CommandRequest{batch: batch, replych: replych}
+			reply := <-replych
+			replyChPool.Put(replych)
+			_, err := writer.Write(reply)
+			return err
+		}
+		return nil
+	}
+
+	for {
+		value, err := decoder.Decode()
 		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
-				continue // our 500ms poll fired, no command yet — loop back (and re-check ctx at top)
-			}
-			if err != io.EOF {
+			if err != io.EOF && ctx.Err() == nil {
 				log.Printf("read error from %s: %v", conn.RemoteAddr(), err)
 			}
 			log.Printf("client disconnected: %s", conn.RemoteAddr())
 			return
 		}
-		conn.SetReadDeadline(time.Time{})
 		command, err := commands.ParseCommand(value)
 		if err != nil {
 			log.Printf("parse error from %s: %v", conn.RemoteAddr(), err)
@@ -189,27 +261,85 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 			continue
 		}
 		action, txReply, batch := tx.handle(command)
-		var reply []byte
-		switch action {
-		case actionReply:
-			reply = txReply
-		case actionExec:
-			replych := make(chan []byte, 1)
-			commandCh <- CommandRequest{batch: batch, replych: replych}
-			reply = <-replych
-		case actionPassthrough:
-			replych := make(chan []byte, 1)
-			commandCh <- CommandRequest{cmd: *command, replych: replych}
-			reply = <-replych
-		}
-		log.Printf("reply: %q", string(reply))
-		if _, err := writer.Write(reply); err != nil {
-			log.Printf("Writing")
-			log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
-			return
+
+		if action != actionPassthrough {
+			if err := handleAction(action, txReply, batch); err != nil {
+				log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
+				return
+			}
+		} else {
+			// Fold in any further commands the client already sent without
+			// waiting for a reply (pipelining) -- reader.Buffered() > 0
+			// means more RESP data is already sitting in memory, so
+			// decoding it here doesn't block. Each is still run through
+			// tx.handle in order, exactly as if handled one at a time;
+			// only genuine plain commands get added to the batch.
+			pipeline := []*commands.Command{command}
+		pipelineLoop:
+			for reader.Buffered() > 0 {
+				v, err := decoder.Decode()
+				if err != nil {
+					// A raw protocol decode error is fatal for the
+					// connection -- same as the top-level decode error
+					// path above. Flush whatever valid replies we've
+					// already accumulated first so they aren't lost, then
+					// disconnect. (Silently dropping the bad frame and
+					// continuing would desync a pipelining client's
+					// request/reply counting -- it would never learn that
+					// one of its requests got no reply.)
+					if flushErr := dispatchPipeline(pipeline); flushErr != nil {
+						log.Printf("write error to %s: %v \n", conn.RemoteAddr(), flushErr)
+						return
+					}
+					if flushErr := writer.Flush(); flushErr != nil {
+						log.Printf("flush error to %s: %v \n", conn.RemoteAddr(), flushErr)
+						return
+					}
+					if err != io.EOF && ctx.Err() == nil {
+						log.Printf("read error from %s: %v", conn.RemoteAddr(), err)
+					}
+					log.Printf("client disconnected: %s", conn.RemoteAddr())
+					return
+				}
+				nextCmd, perr := commands.ParseCommand(v)
+				if perr != nil {
+					if err := dispatchPipeline(pipeline); err != nil {
+						log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
+						return
+					}
+					pipeline = nil
+					log.Printf("parse error from %s: %v", conn.RemoteAddr(), perr)
+					if _, werr := conn.Write(core.EncodeError("ERR " + perr.Error())); werr != nil {
+						log.Printf("write error to %s: %v", conn.RemoteAddr(), werr)
+						return
+					}
+					break pipelineLoop
+				}
+				nextAction, nextTxReply, nextBatch := tx.handle(nextCmd)
+				if nextAction != actionPassthrough {
+					// Flush what's accumulated so far first, to preserve
+					// reply order, then handle this one normally.
+					if err := dispatchPipeline(pipeline); err != nil {
+						log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
+						return
+					}
+					pipeline = nil
+					if err := handleAction(nextAction, nextTxReply, nextBatch); err != nil {
+						log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
+						return
+					}
+					break pipelineLoop
+				}
+				pipeline = append(pipeline, nextCmd)
+			}
+			if pipeline != nil {
+				if err := dispatchPipeline(pipeline); err != nil {
+					log.Printf("write error to %s: %v \n", conn.RemoteAddr(), err)
+					return
+				}
+			}
 		}
 		if reader.Buffered() == 0 {
-			log.Printf("Flushing")
 			if err := writer.Flush(); err != nil {
 				log.Printf("flush error to %s: %v \n", conn.RemoteAddr(), err)
 				return

@@ -38,7 +38,7 @@ func readInteger(r *bufio.Reader) (int64, error) {
 	return n, nil
 }
 
-func readBulkString(r *bufio.Reader) (string, error) {
+func readBulkString(r *bufio.Reader, scratch *[]byte) (string, error) {
 	line, err := readLine(r)
 	if err != nil {
 		return "", err
@@ -50,25 +50,35 @@ func readBulkString(r *bufio.Reader) (string, error) {
 	if length == -1 {
 		return "", nil
 	}
-	buffer := make([]byte, length)
+	// Read the body and its trailing \r\n in a single ReadFull instead of
+	// io.ReadFull + two separate ReadByte calls.
+	need := length + 2
+	var buffer []byte
+	if scratch != nil {
+		// Reuse the caller's scratch buffer across calls (grows as needed)
+		// instead of allocating a fresh []byte for every argument of every
+		// command. Only used on hot paths that decode many commands in a
+		// row from the same connection; nil scratch preserves the old
+		// one-shot-allocation behavior for callers like AOF replay.
+		if cap(*scratch) < need {
+			*scratch = make([]byte, need)
+		}
+		buffer = (*scratch)[:need]
+	} else {
+		buffer = make([]byte, need)
+	}
 	if _, err := io.ReadFull(r, buffer); err != nil {
 		return "", fmt.Errorf("reading bulk string body: %w", err)
 	}
-	cr, err := r.ReadByte()
-	if err != nil {
-		return "", err
+	if buffer[length] != '\r' || buffer[length+1] != '\n' {
+		return "", fmt.Errorf("bulk string not terminated with \\r\\n, got %q%q", buffer[length], buffer[length+1])
 	}
-	lf, err := r.ReadByte()
-	if err != nil {
-		return "", err
-	}
-	if cr != '\r' || lf != '\n' {
-		return "", fmt.Errorf("bulk string not terminated with \\r\\n, got %q%q", cr, lf)
-	}
-	return string(buffer), nil
+	// string(buffer[:length]) always copies, so this is safe even though
+	// buffer may be reused (via scratch) on the next call.
+	return string(buffer[:length]), nil
 }
 
-func readArray(r *bufio.Reader) ([]any, error) {
+func readArray(r *bufio.Reader, scratch *[]byte) ([]any, error) {
 	line, err := readLine(r)
 	if err != nil {
 		return nil, err
@@ -79,7 +89,7 @@ func readArray(r *bufio.Reader) ([]any, error) {
 	}
 	result := make([]any, count)
 	for i := 0; i < count; i++ {
-		val, err := Decode(r)
+		val, err := decode(r, scratch)
 		if err != nil {
 			return nil, fmt.Errorf("Error reading array element %d, %w", i, err)
 		}
@@ -88,7 +98,7 @@ func readArray(r *bufio.Reader) ([]any, error) {
 	return result, nil
 }
 
-func Decode(r *bufio.Reader) (any, error) {
+func decode(r *bufio.Reader, scratch *[]byte) (any, error) {
 	typeByte, err := r.ReadByte()
 	if err != nil {
 		return nil, err
@@ -101,10 +111,36 @@ func Decode(r *bufio.Reader) (any, error) {
 	case ':':
 		return readInteger(r)
 	case '$':
-		return readBulkString(r)
+		return readBulkString(r, scratch)
 	case '*':
-		return readArray(r)
+		return readArray(r, scratch)
 	default:
 		return nil, fmt.Errorf("unknown RESP type byte: %q", typeByte)
 	}
+}
+
+// Decode parses one RESP value from r. Each call that reaches a bulk string
+// allocates its own buffer — fine for occasional/one-shot use (e.g. AOF
+// replay, tests). For decoding many commands in a row from the same
+// connection, use NewDecoder instead to reuse a scratch buffer across calls.
+func Decode(r *bufio.Reader) (any, error) {
+	return decode(r, nil)
+}
+
+// Decoder wraps a *bufio.Reader with a reusable scratch buffer, so decoding
+// many commands in a row (the normal connection hot path) doesn't allocate a
+// fresh []byte for every bulk-string argument of every command.
+type Decoder struct {
+	r       *bufio.Reader
+	scratch []byte
+}
+
+func NewDecoder(r *bufio.Reader) *Decoder {
+	return &Decoder{r: r}
+}
+
+// Decode parses one RESP value, reusing this Decoder's scratch buffer for
+// any bulk-string bodies encountered.
+func (d *Decoder) Decode() (any, error) {
+	return decode(d.r, &d.scratch)
 }

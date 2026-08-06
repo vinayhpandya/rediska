@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof" // <-- ADDED: registers /debug/pprof/* handlers
 	"os"
 	"os/signal"
 	"rediska/config"
@@ -12,6 +14,8 @@ import (
 	"rediska/store"
 	"syscall"
 )
+
+var pprofAddr string // <-- ADDED
 
 func setUpFlags() {
 	flag.IntVar(&config.Port, "port", 7379, "Port for rediska")
@@ -23,14 +27,28 @@ func setUpFlags() {
 	flag.IntVar(&config.MaxMemorySamples, "maxmemory-samples", 5, "Samples to use for eviction policy")
 	flag.IntVar(&config.LFULogFactor, "lfu-log-factor", 10, "Controls how quickly the LFU counter grows (higher = slower growth)")
 	flag.IntVar(&config.LFUDecayTime, "lfu-decay-time", 1, "Minutes of idle time per LFU counter decay step")
+	// ADDED: opt-in flag, off by default (empty string = pprof never starts)
+	flag.StringVar(&pprofAddr, "pprof-addr", "", "If set, expose net/http/pprof on this address (e.g. localhost:6060). Disabled by default.")
 	flag.Parse()
 }
+
 func main() {
 	setUpFlags()
 	store.Default.SetPolicy(config.MaxMemoryPolicy)
 	store.SetLFUParams(config.LFULogFactor, config.LFUDecayTime)
 	context, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// ADDED: start the pprof HTTP server on its own port, only if requested
+	if pprofAddr != "" {
+		go func() {
+			log.Printf("pprof listening on %s", pprofAddr)
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				log.Printf("pprof server error: %v", err)
+			}
+		}()
+	}
+
 	fmt.Printf("Starting Rediska on host %v and port %v  and append file %v\n", config.Host, config.Port, config.AppendOnlyFile)
 	if err := server.Run(context, config.Host, config.Port, config.AppendOnly, config.AppendOnlyFile); err != nil {
 		log.Fatalf("server failed: %v", err)
