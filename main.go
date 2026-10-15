@@ -27,6 +27,7 @@ func setUpFlags() {
 	flag.IntVar(&config.MaxMemorySamples, "maxmemory-samples", 5, "Samples to use for eviction policy")
 	flag.IntVar(&config.LFULogFactor, "lfu-log-factor", 10, "Controls how quickly the LFU counter grows (higher = slower growth)")
 	flag.IntVar(&config.LFUDecayTime, "lfu-decay-time", 1, "Minutes of idle time per LFU counter decay step")
+	flag.BoolVar(&config.ClusterEnabled, "cluster-enabled", false, "Run rediska as a cluster node")
 	// ADDED: opt-in flag, off by default (empty string = pprof never starts)
 	flag.StringVar(&pprofAddr, "pprof-addr", "", "If set, expose net/http/pprof on this address (e.g. localhost:6060). Disabled by default.")
 	flag.Parse()

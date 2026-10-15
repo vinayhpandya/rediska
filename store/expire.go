@@ -1,7 +1,5 @@
 package store
 
-import "fmt"
-
 func (s *Store) DeleteExpired() int {
 	const maxKeys = 20
 	deleted := 0
@@ -16,8 +14,7 @@ func (s *Store) DeleteExpired() int {
 		}
 		checked++
 		if s.isExpired(e) {
-			delete(s.data, key)
-			fmt.Printf("active expiry: deleted key %q", key)
+			s.removeKey(key)
 			deleted++
 		}
 	}

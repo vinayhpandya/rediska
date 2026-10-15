@@ -10,4 +10,5 @@ var (
 	MaxMemorySamples int    // 5 default
 	LFULogFactor     int    // 10 default; controls LFU counter growth rate
 	LFUDecayTime     int
+	ClusterEnabled   bool
 )

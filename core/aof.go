@@ -15,7 +15,7 @@ func (a *AOF) Sync() error {
 }
 
 func NewAOF(path string) (*AOF, error) {
-	f, ok := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	f, ok := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if ok != nil {
 		return nil, fmt.Errorf("Error while reading AOF file %w", ok)
 	}

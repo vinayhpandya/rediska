@@ -302,6 +302,21 @@ func (s *Store) PFMerge(dest string, sources ...string) {
 	s.usedMemory += entrySize(dest, e)
 }
 
+func (s *Store) Delete(keys ...string) int64 {
+	var removed int64
+	for _, key := range keys {
+		e, ok := s.data[key]
+		if !ok {
+			continue
+		}
+		if !s.isExpired(e) {
+			removed++
+		}
+		s.removeKey(key)
+	}
+	return removed
+}
+
 // Note: all deletions now route through removeKey (in lru.go) so the
 // usedMemory counter and the keys stat stay consistent. The old inline
 // delete(s.data, key) calls have been replaced.

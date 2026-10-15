@@ -31,6 +31,17 @@ var replyChPool = sync.Pool{
 	},
 }
 
+func replayAOFCommand(args []string) {
+	if len(args) == 0 {
+		return
+	}
+	cmd := &commands.Command{
+		Name: strings.ToUpper(args[0]),
+		Args: args[1:],
+	}
+	commands.Dispatch(cmd)
+}
+
 func Run(ctx context.Context, host string, port int, appendOnly bool, appendFilename string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	var aof *core.AOF
@@ -42,21 +53,13 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 			return fmt.Errorf("init AOF: %w", err)
 		}
 		aof = a
-		commands.SetAOF(aof)
+
 		log.Println("Recovering from appendOnly file")
-		if err := aof.Recover(func(args []string) {
-			if len(args) == 0 {
-				return
-			}
-			cmd := &commands.Command{
-				Name: strings.ToUpper(args[0]),
-				Args: args[1:],
-			}
-			commands.Dispatch(cmd)
-		}); err != nil {
+		if err := aof.Recover(replayAOFCommand); err != nil {
 			aof.Close()
 			return fmt.Errorf("Error during AOF recovery: %w", err)
 		}
+		commands.SetAOF(aof)
 	}
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
