@@ -57,6 +57,9 @@ func Dispatch(cmd *Command) []byte {
 	if !ok {
 		return core.EncodeError(fmt.Sprintf("ERR unknown command '%s'", cmd.Name))
 	}
+	if errReply := checkCluster(cmd); errReply != nil { // ← new
+		return errReply
+	}
 	reply := handler(cmd.Args)
 	if denyOOMCommands[cmd.Name] && config.MaxMemory > 0 {
 		maxBytes := int64(config.MaxMemory) << 20

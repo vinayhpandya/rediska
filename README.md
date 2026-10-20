@@ -197,3 +197,48 @@ testing, closing the previously channel-contention-dominated gap.
 Profiled with Go's built-in `net/http/pprof` (enabled via a `--pprof-addr`
 flag, off by default) and `go tool pprof -http=...` for interactive CPU/
 allocation flame graphs and call graphs.
+
+## Milestone 13
+
+Cluster layout and per-command slot ownership checks
+
+1. Added a static cluster layout file (`--cluster-config-file`), required
+   with `--cluster-enabled`. Each line is
+   `<name> <host:port> <slot or range> [<slot or range> ...]`; `#` starts a
+   comment
+2. Each node finds itself in the file by matching `--port` against the
+   addresses. Node IDs are derived from the name (SHA-1), so they are
+   stable across restarts
+3. The layout is validated at startup and any mistake is fatal: duplicate
+   names/addresses, overlapping slots, out-of-range slots, or no line
+   matching this node's port
+4. Every command with keys is checked in `Dispatch` before it runs:
+   - keys in different slots -> `CROSSSLOT Keys in request don't hash to the same slot`
+   - slot with no owner -> `CLUSTERDOWN Hash slot not served`
+   - slot owned by another node -> `MOVED <slot> <host:port>`
+5. Keyless commands (PING, INFO, ...) always run locally; with cluster mode
+   off the check is skipped entirely
+
+`cluster.conf` describes a 3-node example:
+```
+node1  127.0.0.1:7001  0-5460
+node2  127.0.0.1:7002  5461-10922
+node3  127.0.0.1:7003  10923-16383
+```
+
+Running a node (one process per line in the file)
+```bash
+go run . --port 7001 --cluster-enabled --cluster-config-file cluster.conf
+```
+
+Trying it out with `redis-cli -c` (follows `MOVED` redirects)
+```bash
+redis-cli -p 7001 set foo bar
+(error) MOVED 12182 127.0.0.1:7003
+```
+
+TODO
+1. Unit tests for the layout parser and routing check
+2. Nodes don't talk to each other yet: the layout is static, with no gossip,
+   failover or resharding (no `ASK`)
+3. May switch to `buf` for dependency management later
