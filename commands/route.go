@@ -7,12 +7,29 @@ import (
 )
 
 func checkCluster(cmd *Command) []byte {
+	keys, _ := KeysOf(cmd)
+	return checkKeys(keys)
+}
+
+func CheckCluster(cmd *Command) []byte {
+	return checkCluster(cmd)
+}
+
+func checkClusterBatch(cmds []*Command) []byte {
+	var keys []string
+	for _, c := range cmds {
+		k, _ := KeysOf(c)
+		keys = append(keys, k...)
+	}
+	return checkKeys(keys)
+}
+
+func checkKeys(keys []string) []byte {
 	layout := cluster.Current
 	if layout == nil {
 		return nil // cluster mode is off
 	}
 
-	keys, _ := KeysOf(cmd)
 	if len(keys) == 0 {
 		return nil // PING, INFO, CLUSTER ...: always run locally
 	}

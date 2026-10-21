@@ -83,6 +83,9 @@ func Dispatch(cmd *Command) []byte {
 }
 
 func DispatchBatch(cmd []*Command) []byte {
+	if errReply := checkClusterBatch(cmd); errReply != nil {
+		return errReply // the whole transaction is refused; nothing ran
+	}
 	replies := make([][]byte, len(cmd))
 	for i, c := range cmd {
 		replies[i] = Dispatch(c)

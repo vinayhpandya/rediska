@@ -70,6 +70,10 @@ func (t *txState) handle(cmd *commands.Command) (action txAction, reply []byte, 
 			t.dirty = true
 			return actionReply, core.EncodeError(fmt.Sprintf("ERR unknown command '%s'", cmd.Name)), nil
 		}
+		if errReply := commands.CheckCluster(cmd); errReply != nil { // ← new
+			t.dirty = true // EXEC will reply EXECABORT
+			return actionReply, errReply, nil
+		}
 		t.queued = append(t.queued, cmd)
 		return actionReply, core.EncodeSimpleString("QUEUED"), nil
 	}
