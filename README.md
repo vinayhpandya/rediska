@@ -200,45 +200,51 @@ allocation flame graphs and call graphs.
 
 ## Milestone 13
 
-Cluster layout and per-command slot ownership checks
+Groundwork for cluster mode and hash slots (Phase 0 and 1)
 
-1. Added a static cluster layout file (`--cluster-config-file`), required
-   with `--cluster-enabled`. Each line is
-   `<name> <host:port> <slot or range> [<slot or range> ...]`; `#` starts a
-   comment
-2. Each node finds itself in the file by matching `--port` against the
-   addresses. Node IDs are derived from the name (SHA-1), so they are
-   stable across restarts
-3. The layout is validated at startup and any mistake is fatal: duplicate
-   names/addresses, overlapping slots, out-of-range slots, or no line
-   matching this node's port
-4. Every command with keys is checked in `Dispatch` before it runs:
-   - keys in different slots -> `CROSSSLOT Keys in request don't hash to the same slot`
-   - slot with no owner -> `CLUSTERDOWN Hash slot not served`
-   - slot owned by another node -> `MOVED <slot> <host:port>`
-5. Keyless commands (PING, INFO, ...) always run locally; with cluster mode
-   off the check is skipped entirely
+1. Fixed AOF: INCR, APPEND, PFADD, PFMERGE and DEL are now written to the AOF
+2. Added DEL command
+3. Every command has a key spec (first key, last key, step) like Redis's
+   command table, with a test that fails if a new command has none
+4. Added `--cluster-enabled` flag
+5. Hash slots: CRC16 (XMODEM) mod 16384, with `{hash tag}` support
+6. Added `CLUSTER KEYSLOT`, verified against real Redis
 
-`cluster.conf` describes a 3-node example:
-```
-node1  127.0.0.1:7001  0-5460
-node2  127.0.0.1:7002  5461-10922
-node3  127.0.0.1:7003  10923-16383
-```
+## Milestone 14
 
-Running a node (one process per line in the file)
-```bash
-go run . --port 7001 --cluster-enabled --cluster-config-file cluster.conf
-```
+Fixed-layout cluster with redirects (Phase 2)
 
-Trying it out with `redis-cli -c` (follows `MOVED` redirects)
-```bash
-redis-cli -p 7001 set foo bar
-(error) MOVED 12182 127.0.0.1:7003
-```
+1. Each node reads the whole layout from `--cluster-config-file`
+   (name, address, slot ranges) and finds itself by its port.
+   A broken layout stops the node at startup
+2. Before running a command, the node checks its keys:
+   -> keys in different slots: `CROSSSLOT`
+   -> slot owned by nobody: `CLUSTERDOWN Hash slot not served`
+   -> slot owned by another node: `MOVED <slot> <host:port>`
+3. AOF replay skips the cluster check, so a node always loads its own data
+4. MULTI/EXEC: each command is checked when queued (MOVED -> EXECABORT),
+   and all queued keys must be in one slot at EXEC (CROSSSLOT),
+   so a transaction never runs halfway
+5. Added `CLUSTER SLOTS`, `CLUSTER NODES`, `CLUSTER MYID`, `CLUSTER INFO`
+   and the `# Cluster` section in INFO, matching real Redis 7's formats
+6. `scripts/cluster.sh start|stop|status|clean` runs a local cluster
+7. End-to-end test (`go test ./e2e/`) starts 3 real nodes and checks
+   redirects, hash tags, pipelines, transactions and CLUSTER SLOTS
+8. Verified with `redis-cli -c`, `redis-cli --cluster check` and
+   `redis-benchmark --cluster`
+
+Try it:
+
+    ./scripts/cluster.sh start
+    redis-cli -p 7001 set name vinay      # MOVED 5798 127.0.0.1:7002
+    redis-cli -c -p 7001 set name vinay   # follows the redirect: OK
+    redis-cli -p 7001 del age name        # CROSSSLOT
+    ./scripts/cluster.sh stop
 
 TODO
-1. Unit tests for the layout parser and routing check
-2. Nodes don't talk to each other yet: the layout is static, with no gossip,
-   failover or resharding (no `ASK`)
-3. May switch to `buf` for dependency management later
+
+1. Nodes don't talk to each other yet; the layout is fixed until restart (Phase 4)
+2. No moving slots between nodes (Phase 5), no replicas or failover (Phases 6, 7)
+3. Finding itself by port only works when all nodes are on one machine;
+   needs a `--cluster-node-name` flag for separate machines
+4. redis-py's cluster client also needs HELLO and COMMAND, which Rediska doesn't have yet
