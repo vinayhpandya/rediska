@@ -6,3 +6,5 @@ redis.log
 node-*.log
 rediska
 docs/api/
+site/
+.venv/
