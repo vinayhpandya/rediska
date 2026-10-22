@@ -1,0 +1,56 @@
+# CI: format, vet, build and test Rediska on every push to main and every
+# pull request, on both Linux and macOS.
+name: ci
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch: # adds a "Run workflow" button on the Actions tab
+
+# The workflow only needs to read the code.
+permissions:
+    contents: read
+
+# If you push again while a run is still going, cancel the old run.
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    test:
+        name: test (${{ matrix.os }})
+        strategy:
+            fail-fast: false # let both OSes finish, so you see every failure
+            matrix:
+                os: [ubuntu-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 10
+
+        steps:
+            - name: Check out the code
+              uses: actions/checkout@v4
+
+            - name: Set up Go (version from go.mod)
+              uses: actions/setup-go@v5
+              with:
+                  go-version-file: go.mod
+                  cache: false # no dependencies (no go.sum), so nothing to cache
+
+            - name: Check formatting (gofmt)
+              run: |
+                  unformatted="$(gofmt -l .)"
+                  if [ -n "$unformatted" ]; then
+                    echo "These files are not gofmt'ed. Run 'gofmt -w .' and commit:"
+                    echo "$unformatted"
+                    exit 1
+                  fi
+
+            - name: Vet
+              run: go vet ./...
+
+            - name: Build
+              run: go build ./...
+
+            - name: Test (with the race detector)
+              run: go test -race -count=1 ./...
