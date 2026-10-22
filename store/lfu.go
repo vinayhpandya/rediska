@@ -28,6 +28,9 @@ var (
 	LFUDecayTime uint32 = 1  // minutes per decay step (config: lfu-decay-time)
 )
 
+// SetLFUParams sets how LFU counters grow and decay, from the
+// --lfu-log-factor and --lfu-decay-time flags. Out-of-range values (a
+// negative logFactor, or decayTime below 1) leave the current setting.
 func SetLFUParams(logFactor, decayTime int) {
 	if logFactor >= 0 {
 		LFULogFactor = uint32(logFactor)

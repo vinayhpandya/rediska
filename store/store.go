@@ -1,3 +1,11 @@
+// Package store holds Rediska's data: an in-memory map from keys to
+// values, with expiry, memory accounting and eviction (LRU or LFU).
+//
+// Values are kept in compact encodings, as in Redis: integers as numbers,
+// strings as SDS, HyperLogLogs as sketches (see Encoding).
+//
+// A Store is not safe for concurrent use. The server only touches Default
+// from its single dispatch worker goroutine.
 package store
 
 import (
@@ -33,6 +41,7 @@ type Store struct {
 	policy     string              // active maxmemory-policy; see SetPolicy
 }
 
+// New returns an empty Store using the noeviction policy.
 func New() *Store {
 	return &Store{
 		data:   make(map[string]entry),
@@ -42,6 +51,9 @@ func New() *Store {
 	}
 }
 
+// SetPolicy sets the maxmemory policy, which decides how keys are evicted
+// and whether keys track recency (LRU) or frequency (LFU). It is called
+// once at startup.
 func (s *Store) SetPolicy(policy string) {
 	s.policy = policy
 }
@@ -100,6 +112,10 @@ func (s *Store) GetFreq(key string) (freq uint8, ok bool, policyOK bool) {
 	return lfuDecodeCounter(value.lru), true, true
 }
 
+// Set stores value under key, replacing any old value and its expiry. If
+// ttl is greater than zero the key expires after ttl; otherwise it never
+// expires. The value is stored as an integer if it parses as one, and as a
+// string otherwise.
 func (s *Store) Set(key, value string, ttl time.Duration) {
 	old, exists := s.data[key]
 	if !exists {
@@ -162,6 +178,10 @@ func (s *Store) Append(key, value string) int64 {
 	return int64(buf.Len())
 }
 
+// GetInt returns key's value as an integer, for commands like INCR. The
+// results are the value, whether the key exists, an error if it exists
+// but doesn't hold an integer, and the key's expiry time (zero if none).
+// It counts as an access for LRU/LFU.
 func (s *Store) GetInt(key string) (int64, bool, error, time.Time) {
 	e, ok := s.data[key]
 	if !ok {
@@ -194,6 +214,10 @@ func (s *Store) GetEncoding(key string) (Encoding, bool) {
 	return value.encoding, true
 }
 
+// Get returns key's value as a string, and whether the key exists. An
+// expired key is removed and reported as missing. It counts as an access
+// for LRU/LFU. A key holding a HyperLogLog is also reported as missing,
+// whereas real Redis would return its raw bytes.
 func (s *Store) Get(key string) (string, bool) {
 	e, ok := s.data[key]
 	if !ok {
@@ -240,6 +264,8 @@ func (s *Store) isExpired(e entry) bool {
 	return !e.expiresAt.IsZero() && !s.now().Before(e.expiresAt)
 }
 
+// UsedMemory returns the store's estimate of the memory its keys and
+// values use, in bytes. It is what --maxmemory is compared against.
 func (s *Store) UsedMemory() int64 {
 	return s.usedMemory
 }
@@ -250,6 +276,9 @@ func (s *Store) KeyCount() int {
 	return len(s.data)
 }
 
+// PFAdd adds values to the HyperLogLog at key, creating it if needed, and
+// reports whether the estimated count changed. Unlike Redis, a key holding
+// some other type is replaced instead of rejected with WRONGTYPE.
 func (s *Store) PFAdd(key string, values ...string) (changed bool) {
 	e, exists := s.data[key]
 	if !exists || e.encoding != EncodingHLL {
@@ -264,6 +293,8 @@ func (s *Store) PFAdd(key string, values ...string) (changed bool) {
 	return changed
 }
 
+// PFCount returns the estimated number of distinct values in the
+// HyperLogLog at key, or 0 if key doesn't exist or isn't a HyperLogLog.
 func (s *Store) PFCount(key string) int64 {
 	e, ok := s.data[key]
 	if !ok || e.encoding != EncodingHLL {
@@ -272,6 +303,9 @@ func (s *Store) PFCount(key string) int64 {
 	return int64(e.hllVal.Count())
 }
 
+// PFMerge stores in dest the union of the HyperLogLogs at dest and every
+// source key. Missing keys and keys of other types are ignored. dest
+// loses any expiry it had.
 func (s *Store) PFMerge(dest string, sources ...string) {
 	acc := hll.New()
 
@@ -302,6 +336,8 @@ func (s *Store) PFMerge(dest string, sources ...string) {
 	s.usedMemory += entrySize(dest, e)
 }
 
+// Delete removes keys and returns how many of them existed. Keys that had
+// already expired are removed too, but not counted, as in Redis.
 func (s *Store) Delete(keys ...string) int64 {
 	var removed int64
 	for _, key := range keys {

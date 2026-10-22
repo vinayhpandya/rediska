@@ -1,3 +1,12 @@
+// Package commands implements every Redis command Rediska supports.
+//
+// Each command lives in its own file and registers a handler with Register
+// from an init function. Dispatch looks the handler up and runs it; in
+// cluster mode it first checks that this node owns the command's keys.
+//
+// All functions that touch data (Dispatch, DispatchBatch, DispatchPipeline)
+// must run on the server's single dispatch worker goroutine, because the
+// store is not safe for concurrent use.
 package commands
 
 import (
@@ -7,6 +16,8 @@ import (
 	"github.com/vinayhpandya/rediska/store"
 )
 
+// HandlerFunc runs one command. args are the command's arguments without
+// the command name, and the return value is the full encoded RESP reply.
 type HandlerFunc func(args []string) []byte
 
 var commands = make(map[string]HandlerFunc)
@@ -31,9 +42,16 @@ var denyOOMCommands = map[string]bool{
 	"PFMERGE": true,
 }
 
+// SetAOF makes Dispatch append successful write commands to a. Call it
+// only after the AOF has been replayed at startup; otherwise every
+// replayed command would be written to the file a second time.
 func SetAOF(a *core.AOF) {
 	aof = a
 }
+
+// Register adds a command. name must be upper case, since Dispatch looks
+// commands up by their upper-cased name. Registering a name twice replaces
+// the earlier handler. Command files call Register from their init function.
 func Register(name string, f HandlerFunc) {
 	commands[name] = f
 }
@@ -44,6 +62,10 @@ func init() {
 		return core.EncodeInteger(int64(deleted))
 	})
 }
+
+// IsKnownCommand reports whether a command called name (upper case) has
+// been registered. MULTI uses it to reject unknown commands when they are
+// queued, rather than at EXEC.
 func IsKnownCommand(name string) bool {
 	_, ok := commands[name]
 	return ok
@@ -52,6 +74,21 @@ func IsKnownCommand(name string) bool {
 func isErrorReply(reply []byte) bool {
 	return len(reply) > 0 && reply[0] == '-'
 }
+
+// Dispatch runs one command and returns its encoded RESP reply.
+//
+// It replies with an error, without running anything, if the command is
+// unknown or, in cluster mode, if its keys span several slots (CROSSSLOT),
+// belong to no node (CLUSTERDOWN) or belong to another node (MOVED).
+//
+// Otherwise it runs the handler. Then, for commands that can grow memory
+// and only when --maxmemory is set, it evicts keys according to the policy
+// and replies with an OOM error if memory is still over the limit. Note
+// that the command has already run at that point, but is not written to
+// the AOF. Otherwise, successful write commands are appended to the AOF,
+// if one is set (see SetAOF).
+//
+// Dispatch must only be called from the dispatch worker goroutine.
 func Dispatch(cmd *Command) []byte {
 	handler, ok := commands[cmd.Name]
 	if !ok {
@@ -82,6 +119,13 @@ func Dispatch(cmd *Command) []byte {
 
 }
 
+// DispatchBatch runs the commands queued by MULTI when the client sends
+// EXEC, and returns their replies wrapped in one RESP array.
+//
+// In cluster mode, all keys of all the commands together must be in one
+// slot owned by this node. If they aren't, DispatchBatch returns that
+// single error (CROSSSLOT, CLUSTERDOWN or MOVED) and runs nothing, so a
+// transaction never runs halfway.
 func DispatchBatch(cmd []*Command) []byte {
 	if errReply := checkClusterBatch(cmd); errReply != nil {
 		return errReply // the whole transaction is refused; nothing ran

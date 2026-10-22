@@ -135,6 +135,7 @@ type Decoder struct {
 	scratch []byte
 }
 
+// NewDecoder returns a Decoder that reads from r.
 func NewDecoder(r *bufio.Reader) *Decoder {
 	return &Decoder{r: r}
 }

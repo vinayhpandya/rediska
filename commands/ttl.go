@@ -1,4 +1,3 @@
-// commands/ttl.go
 package commands
 
 import (
