@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"rediska/cluster"
-	"rediska/config"
-	"rediska/core"
+	"github.com/vinayhpandya/rediska/cluster"
+	"github.com/vinayhpandya/rediska/config"
+	"github.com/vinayhpandya/rediska/core"
 )
 
 func init() {

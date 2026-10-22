@@ -2,8 +2,8 @@ package server
 
 import (
 	"fmt"
-	"rediska/commands"
-	"rediska/core"
+	"github.com/vinayhpandya/rediska/commands"
+	"github.com/vinayhpandya/rediska/core"
 )
 
 type txState struct {

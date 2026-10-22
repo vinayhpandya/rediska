@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"rediska/core"
+	"github.com/vinayhpandya/rediska/core"
 )
 
 // Slots used below (same as on your Mac):
@@ -47,9 +47,9 @@ func startCluster(t *testing.T) *testCluster {
 	}
 	dir := t.TempDir()
 
-	// 1. Build. "rediska" is the module path, so this works from any folder.
+	// 1. Build. Using the module path means this works from any folder.
 	bin := filepath.Join(dir, "rediska")
-	build := exec.Command("go", "build", "-o", bin, "rediska")
+	build := exec.Command("go", "build", "-o", bin, "github.com/vinayhpandya/rediska")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build failed: %v\n%s", err, out)
 	}

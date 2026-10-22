@@ -1,6 +1,6 @@
 package commands
 
-import "rediska/core"
+import "github.com/vinayhpandya/rediska/core"
 
 func init() {
 	Register("PING", handlePing)

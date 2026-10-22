@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"rediska/core"
-	"rediska/store"
+	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/store"
 )
 
 func init() {

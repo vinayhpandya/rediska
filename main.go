@@ -4,15 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/vinayhpandya/rediska/cluster"
+	"github.com/vinayhpandya/rediska/config"
+	"github.com/vinayhpandya/rediska/server"
+	"github.com/vinayhpandya/rediska/store"
 	"log"
 	"net/http"
 	_ "net/http/pprof" // <-- ADDED: registers /debug/pprof/* handlers
 	"os"
 	"os/signal"
-	"rediska/cluster"
-	"rediska/config"
-	"rediska/server"
-	"rediska/store"
 	"syscall"
 )
 
