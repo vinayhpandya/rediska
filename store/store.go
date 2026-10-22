@@ -9,6 +9,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -77,6 +78,10 @@ func (s *Store) stampAccess(current uint32) uint32 {
 	}
 	return s.lruClock()
 }
+
+// ErrNotHLL is returned when a HyperLogLog command is used on a key that
+// holds some other kind of value. The text matches Redis's reply.
+var ErrNotHLL = errors.New("WRONGTYPE Key is not a valid HyperLogLog string value.")
 
 // Default is the global store instance.
 // Never access this directly — always go through the command worker.
@@ -276,13 +281,28 @@ func (s *Store) KeyCount() int {
 	return len(s.data)
 }
 
-// PFAdd adds values to the HyperLogLog at key, creating it if needed, and
-// reports whether the estimated count changed. Unlike Redis, a key holding
-// some other type is replaced instead of rejected with WRONGTYPE.
-func (s *Store) PFAdd(key string, values ...string) (changed bool) {
+// PFAdd adds values to the HyperLogLog at key, creating it if needed. It
+// reports whether anything changed: creating the key counts as a change,
+// even with no values, as in Redis. If key holds some other kind of value,
+// PFAdd changes nothing and returns ErrNotHLL.
+func (s *Store) PFAdd(key string, values ...string) (changed bool, err error) {
 	e, exists := s.data[key]
-	if !exists || e.encoding != EncodingHLL {
-		e = entry{encoding: EncodingHLL, hllVal: hll.New(), lru: s.lruClock()}
+	if exists && s.isExpired(e) {
+		s.removeKey(key)
+		exists = false
+	}
+	if exists && e.encoding != EncodingHLL {
+		return false, ErrNotHLL
+	}
+	if exists {
+		// Adding values can grow the sketch, so drop its old size first
+		// and add the new size back below.
+		s.usedMemory -= entrySize(key, e)
+		e.lru = s.stampAccess(e.lru)
+	} else {
+		e = entry{encoding: EncodingHLL, hllVal: hll.New(), lru: s.stampNew()}
+		UpdateDbStat(0, "keys", 1)
+		changed = true
 	}
 	for _, v := range values {
 		if e.hllVal.Add([]byte(v)) {
@@ -290,7 +310,8 @@ func (s *Store) PFAdd(key string, values ...string) (changed bool) {
 		}
 	}
 	s.data[key] = e
-	return changed
+	s.usedMemory += entrySize(key, e)
+	return changed, nil
 }
 
 // PFCount returns the estimated number of distinct values in the

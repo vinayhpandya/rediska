@@ -52,7 +52,7 @@ func replayAOFCommand(args []string) {
 		Name: strings.ToUpper(args[0]),
 		Args: args[1:],
 	}
-	commands.Dispatch(cmd)
+	commands.Replay(cmd)
 }
 
 // Run starts the server and blocks until ctx is cancelled.

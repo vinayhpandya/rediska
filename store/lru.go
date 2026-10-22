@@ -47,6 +47,10 @@ func entrySize(key string, e entry) int64 {
 		if e.strVal != nil {
 			valueSize = e.strVal.Cap()
 		}
+	case EncodingHLL:
+		if e.hllVal != nil {
+			valueSize = e.hllVal.Size()
+		}
 	}
 	return int64(len(key) + valueSize + entryOverhead)
 }

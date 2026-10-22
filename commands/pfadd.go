@@ -15,7 +15,10 @@ func handlePFAdd(args []string) []byte {
 	}
 	key := args[0]
 	values := args[1:]
-	changed := store.Default.PFAdd(key, values...)
+	changed, err := store.Default.PFAdd(key, values...)
+	if err != nil {
+		return core.EncodeError(err.Error())
+	}
 	if changed {
 		return core.EncodeInteger(1)
 	}

@@ -81,12 +81,12 @@ func isErrorReply(reply []byte) bool {
 // unknown or, in cluster mode, if its keys span several slots (CROSSSLOT),
 // belong to no node (CLUSTERDOWN) or belong to another node (MOVED).
 //
-// Otherwise it runs the handler. Then, for commands that can grow memory
-// and only when --maxmemory is set, it evicts keys according to the policy
-// and replies with an OOM error if memory is still over the limit. Note
-// that the command has already run at that point, but is not written to
-// the AOF. Otherwise, successful write commands are appended to the AOF,
-// if one is set (see SetAOF).
+// For commands that can grow memory, and only when --maxmemory is set, it
+// then evicts keys according to the policy, and replies with an OOM error
+// without running the command if memory is still over the limit.
+//
+// Otherwise it runs the handler, and appends successful write commands to
+// the AOF if one is set (see SetAOF).
 //
 // Dispatch must only be called from the dispatch worker goroutine.
 func Dispatch(cmd *Command) []byte {
@@ -94,10 +94,11 @@ func Dispatch(cmd *Command) []byte {
 	if !ok {
 		return core.EncodeError(fmt.Sprintf("ERR unknown command '%s'", cmd.Name))
 	}
-	if errReply := checkCluster(cmd); errReply != nil { // ← new
-		return errReply
+	if errReply := checkCluster(cmd); errReply != nil {
+		return errReply // CROSSSLOT, CLUSTERDOWN or MOVED: nothing was run
 	}
-	reply := handler(cmd.Args)
+	// Check memory BEFORE running the command, as Redis does, so a write
+	// that's rejected for OOM has no effect.
 	if denyOOMCommands[cmd.Name] && config.MaxMemory > 0 {
 		maxBytes := int64(config.MaxMemory) << 20
 		switch config.MaxMemoryPolicy {
@@ -105,10 +106,11 @@ func Dispatch(cmd *Command) []byte {
 			store.Default.PerformEvictions(config.MaxMemorySamples, maxBytes)
 		case "noeviction":
 		}
-		if store.Default.OverMemory(maxBytes) { // still over after the switch → reject
+		if store.Default.OverMemory(maxBytes) { // still over after evicting → reject
 			return core.EncodeError("OOM command not allowed when used memory > 'maxmemory'.")
 		}
 	}
+	reply := handler(cmd.Args)
 	if aof != nil && writeCommands[cmd.Name] && !isErrorReply(reply) {
 		fullCmd := append([]string{cmd.Name}, cmd.Args...)
 		if err := aof.Write(fullCmd); err != nil {
@@ -117,6 +119,17 @@ func Dispatch(cmd *Command) []byte {
 	}
 	return reply
 
+}
+
+// Replay runs a command read back from the AOF at startup. Unlike
+// Dispatch, it skips the cluster check and the memory check, and doesn't
+// write to the AOF: everything in this node's AOF was already accepted by
+// this node, so it must all be loaded back, even if the cluster layout has
+// changed since. Unknown commands are ignored.
+func Replay(cmd *Command) {
+	if handler, ok := commands[cmd.Name]; ok {
+		handler(cmd.Args)
+	}
 }
 
 // DispatchBatch runs the commands queued by MULTI when the client sends
