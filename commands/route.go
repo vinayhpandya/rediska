@@ -2,8 +2,8 @@ package commands
 
 import (
 	"fmt"
-	"rediska/cluster"
-	"rediska/core"
+	"github.com/vinayhpandya/rediska/cluster"
+	"github.com/vinayhpandya/rediska/core"
 )
 
 func checkCluster(cmd *Command) []byte {

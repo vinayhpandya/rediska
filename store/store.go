@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"rediska/core/sds"
-	"rediska/store/hll"
+	"github.com/vinayhpandya/rediska/core/sds"
+	"github.com/vinayhpandya/rediska/store/hll"
 	// sync is gone — no locks needed
 )
 

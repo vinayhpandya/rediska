@@ -3,8 +3,8 @@ package commands
 import (
 	"strings"
 
-	"rediska/core"
-	"rediska/store"
+	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/store"
 )
 
 // DEBUG is a non-write command (not in writeCommands), so it never triggers

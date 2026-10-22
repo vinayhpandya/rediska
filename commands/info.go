@@ -2,9 +2,9 @@ package commands
 
 import (
 	"fmt"
-	"rediska/config"
-	"rediska/core"
-	"rediska/store"
+	"github.com/vinayhpandya/rediska/config"
+	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/store"
 	"strings"
 )
 
