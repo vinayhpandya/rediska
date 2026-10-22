@@ -1,3 +1,12 @@
+// Package server runs Rediska's network side: it accepts TCP connections,
+// reads commands, and sends replies.
+//
+// Each client connection has its own goroutine, which parses commands and
+// handles MULTI/EXEC queuing and pipelining. Every command that touches
+// data is sent over a channel to one dispatch worker goroutine, which runs
+// commands one at a time. That's how Rediska keeps Redis's single-threaded
+// guarantee: commands never run at the same time, so the store needs no
+// locks.
 package server
 
 import (
@@ -14,6 +23,10 @@ import (
 	"time"
 )
 
+// CommandRequest is one unit of work sent from a connection to the
+// dispatch worker. Exactly one of its three forms is used: a single
+// command, a MULTI/EXEC batch, or a pipeline. The worker sends the encoded
+// reply back on its reply channel.
 type CommandRequest struct {
 	cmd      commands.Command
 	batch    []*commands.Command // MULTI/EXEC: dispatched as one array-wrapped reply
@@ -39,9 +52,20 @@ func replayAOFCommand(args []string) {
 		Name: strings.ToUpper(args[0]),
 		Args: args[1:],
 	}
-	commands.Dispatch(cmd)
+	commands.Replay(cmd)
 }
 
+// Run starts the server and blocks until ctx is cancelled.
+//
+// If appendOnly is true, it first opens appendFilename and replays it to
+// restore the data. It then listens on host:port, starts the dispatch
+// worker and the active-expiry loop, and serves each connection on its own
+// goroutine.
+//
+// When ctx is cancelled it shuts down cleanly: it stops accepting
+// connections, waits for the open ones to finish, lets the worker run every
+// command already queued, then syncs and closes the AOF. It returns an
+// error only if startup fails (opening or replaying the AOF, or listening).
 func Run(ctx context.Context, host string, port int, appendOnly bool, appendFilename string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	var aof *core.AOF

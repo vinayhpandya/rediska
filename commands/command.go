@@ -5,13 +5,15 @@ import (
 	"strings"
 )
 
+// Command is one parsed client request, such as SET name vinay.
 type Command struct {
 	Name string // uppercased for case-insensitive lookup
 	Args []string
 }
 
-// Converts core.Decode's any into a Command.
-// Validates it's a non-empty array of bulk strings.
+// ParseCommand turns a value decoded by core.Decode into a Command. The
+// value must be a non-empty array of bulk strings; the first one becomes
+// the upper-cased command name.
 func ParseCommand(decoded any) (*Command, error) {
 	arr, ok := decoded.([]any)
 	if !ok {

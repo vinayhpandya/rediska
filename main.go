@@ -1,3 +1,22 @@
+// Rediska is a Redis-compatible in-memory key-value server, written in Go
+// to learn how Redis works on the inside. It speaks RESP, so redis-cli and
+// Redis client libraries can talk to it.
+//
+// Usage:
+//
+//	rediska [flags]
+//
+// Common flags:
+//
+//	--port 7379                  TCP port to listen on
+//	--appendOnly                 log writes to an append-only file (AOF)
+//	--appendOnlyFile FILE        the AOF file to use
+//	--maxmemory MB               memory limit (0 = no limit)
+//	--maxmemory-policy POLICY    noeviction, allkeys-lru, allkeys-lfu or volatile-lfu
+//	--cluster-enabled            run as a cluster node
+//	--cluster-config-file FILE   cluster layout; required with --cluster-enabled
+//
+// Run rediska -h for the full list.
 package main
 
 import (

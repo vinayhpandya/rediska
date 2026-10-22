@@ -5,3 +5,4 @@ rediska_bin
 redis.log
 node-*.log
 rediska
+docs/api/

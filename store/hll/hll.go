@@ -90,6 +90,8 @@ func hllPatLen(data []byte) (index uint64, rank uint8) {
 	return
 }
 
+// Size returns the number of bytes the sketch's current representation
+// (sparse or dense) takes up.
 func (h *HLL) Size() int {
 	if h.enc == encSparse {
 		return len(h.sparse)
