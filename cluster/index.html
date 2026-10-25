@@ -1148,10 +1148,10 @@ Redis Cluster does. Each node holds only its share, and clients are sent to
 the right node.</p>
 <div class="admonition info">
 <p class="admonition-title">Current scope</p>
+</div>
 <p>The cluster layout is <strong>fixed</strong>: every node reads it from a file at
 startup. Nodes don't talk to each other yet, slots can't move while
 running, and there are no replicas. See <a href="#limitations">Limitations</a>.</p>
-</div>
 <h2 id="slots">Slots<a class="headerlink" href="#slots" title="Permanent link">&para;</a></h2>
 <p>Every key belongs to one of <strong>16384 hash slots</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>slot = CRC16(key) mod 16384
@@ -1160,7 +1160,7 @@ running, and there are no replicas. See <a href="#limitations">Limitations</a>.<
 <pre class="mermaid"><code>flowchart LR
     K1["name"] --&gt; S1["slot 5798"] --&gt; N2["node2 (5461–10922)"]
     K2["age"] --&gt; S2["slot 741"] --&gt; N1["node1 (0–5460)"]
-    K3["visits"] --&gt; S3["slot 13041"] --&gt; N3["node3 (10923–16383)"]</code></pre>
+    K3["visits"] --&gt; S3["slot 12263"] --&gt; N3["node3 (10923–16383)"]</code></pre>
 <p>There are far more keys than slots, so each slot holds many keys. Slots are
 the unit that gets assigned to nodes (and, in a later phase, moved between
 them), so the cluster map stays small: 16384 entries, however many keys you
@@ -1291,6 +1291,16 @@ halfway. Use hash tags to keep a transaction's keys together:</p>
 <td>debugging</td>
 </tr>
 <tr>
+<td><code>CLUSTER COUNTKEYSINSLOT slot</code></td>
+<td>how many of <strong>this node's</strong> keys are in the slot</td>
+<td>checking how data is spread; moving slots</td>
+</tr>
+<tr>
+<td><code>CLUSTER GETKEYSINSLOT slot count</code></td>
+<td>up to <code>count</code> of this node's keys in the slot</td>
+<td>moving slots</td>
+</tr>
+<tr>
 <td><code>CLUSTER SLOTS</code></td>
 <td>slot ranges and their owners</td>
 <td>client libraries, to learn the map</td>
@@ -1313,6 +1323,21 @@ halfway. Use hash tags to keep a transaction's keys together:</p>
 </tbody>
 </table>
 <p><code>INFO cluster</code> reports <code>cluster_enabled:1</code> on a cluster node.</p>
+<p><code>COUNTKEYSINSLOT</code> and <code>GETKEYSINSLOT</code> answer about the node you ask, whoever
+owns the slot, and never redirect:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">3</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>getkeysinslot<span class="w"> </span><span class="m">8106</span><span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="go">1) "{user1}.name"</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="go">2) "{user1}.email"</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="go">3) "{user1}.visits"</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">0</span>
+</code></pre></div>
+<p>To answer these quickly, each cluster node keeps a small index of which of
+its keys are in each slot, next to its data. It's updated whenever a key is
+created or removed (including by expiry and eviction), and it's switched off
+on a normal single node.</p>
 <p>Node IDs are derived from the node's name, so they stay the same across
 restarts. Fields that need nodes to talk to each other (ping times, link
 state) have fixed values for now.</p>
