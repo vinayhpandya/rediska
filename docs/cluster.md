@@ -5,9 +5,9 @@ Redis Cluster does. Each node holds only its share, and clients are sent to
 the right node.
 
 !!! info "Current scope"
-    The cluster layout is **fixed**: every node reads it from a file at
-    startup. Nodes don't talk to each other yet, slots can't move while
-    running, and there are no replicas. See [Limitations](#limitations).
+The cluster layout is **fixed**: every node reads it from a file at
+startup. Nodes don't talk to each other yet, slots can't move while
+running, and there are no replicas. See [Limitations](#limitations).
 
 ## Slots
 
@@ -23,7 +23,7 @@ Each node owns some of the slots, and stores only the keys in them.
 flowchart LR
     K1["name"] --> S1["slot 5798"] --> N2["node2 (5461–10922)"]
     K2["age"] --> S2["slot 741"] --> N1["node1 (0–5460)"]
-    K3["visits"] --> S3["slot 13041"] --> N3["node3 (10923–16383)"]
+    K3["visits"] --> S3["slot 12263"] --> N3["node3 (10923–16383)"]
 ```
 
 There are far more keys than slots, so each slot holds many keys. Slots are
@@ -69,7 +69,7 @@ node3  127.0.0.1:7003  10923-16383
 - Any mistake (overlapping slots, a slot above 16383, a duplicate name or
   address, no line for this node's port) stops the node at startup, naming
   the line.
-- Slots that no line lists are *unowned*: commands on them get
+- Slots that no line lists are _unowned_: commands on them get
   `CLUSTERDOWN`, while every other slot keeps working.
 
 Start each node with the same file and its own port:
@@ -181,15 +181,36 @@ QUEUED
 
 ## CLUSTER commands
 
-| Command | Returns | Used by |
-|---|---|---|
-| `CLUSTER KEYSLOT key` | the key's slot | debugging |
-| `CLUSTER SLOTS` | slot ranges and their owners | client libraries, to learn the map |
-| `CLUSTER NODES` | one line per node | `redis-cli --cluster`, `redis-benchmark --cluster` |
-| `CLUSTER MYID` | this node's 40-character ID | debugging |
-| `CLUSTER INFO` | `cluster_state:ok` if every slot has an owner, plus counts | monitoring |
+| Command                            | Returns                                                    | Used by                                            |
+| ---------------------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
+| `CLUSTER KEYSLOT key`              | the key's slot                                             | debugging                                          |
+| `CLUSTER COUNTKEYSINSLOT slot`     | how many of **this node's** keys are in the slot           | checking how data is spread; moving slots          |
+| `CLUSTER GETKEYSINSLOT slot count` | up to `count` of this node's keys in the slot              | moving slots                                       |
+| `CLUSTER SLOTS`                    | slot ranges and their owners                               | client libraries, to learn the map                 |
+| `CLUSTER NODES`                    | one line per node                                          | `redis-cli --cluster`, `redis-benchmark --cluster` |
+| `CLUSTER MYID`                     | this node's 40-character ID                                | debugging                                          |
+| `CLUSTER INFO`                     | `cluster_state:ok` if every slot has an owner, plus counts | monitoring                                         |
 
 `INFO cluster` reports `cluster_enabled:1` on a cluster node.
+
+`COUNTKEYSINSLOT` and `GETKEYSINSLOT` answer about the node you ask, whoever
+owns the slot, and never redirect:
+
+```console
+$ redis-cli -p 7002 cluster countkeysinslot 8106
+(integer) 3
+$ redis-cli -p 7002 cluster getkeysinslot 8106 10
+1) "{user1}.name"
+2) "{user1}.email"
+3) "{user1}.visits"
+$ redis-cli -p 7001 cluster countkeysinslot 8106
+(integer) 0
+```
+
+To answer these quickly, each cluster node keeps a small index of which of
+its keys are in each slot, next to its data. It's updated whenever a key is
+created or removed (including by expiry and eviction), and it's switched off
+on a normal single node.
 
 Node IDs are derived from the node's name, so they stay the same across
 restarts. Fields that need nodes to talk to each other (ping times, link

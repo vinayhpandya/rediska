@@ -23,16 +23,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/vinayhpandya/rediska/cluster"
-	"github.com/vinayhpandya/rediska/config"
-	"github.com/vinayhpandya/rediska/server"
-	"github.com/vinayhpandya/rediska/store"
 	"log"
 	"net/http"
 	_ "net/http/pprof" // <-- ADDED: registers /debug/pprof/* handlers
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/vinayhpandya/rediska/cluster"
+	"github.com/vinayhpandya/rediska/config"
+	"github.com/vinayhpandya/rediska/server"
+	"github.com/vinayhpandya/rediska/store"
 )
 
 var pprofAddr string // <-- ADDED
@@ -65,6 +66,7 @@ func main() {
 			log.Fatal(err)
 		}
 		cluster.Current = layout
+		store.Default.EnableSlotIndex()
 		log.Printf("cluster: I am %s (%s), owning slots %v", layout.Self.Name, layout.Self.Addr, layout.Self.Slots)
 	}
 	store.Default.SetPolicy(config.MaxMemoryPolicy)

@@ -125,7 +125,6 @@ func (s *Store) GetFreq(key string) (freq uint8, ok bool, policyOK bool) {
 func (s *Store) Set(key, value string, ttl time.Duration) {
 	old, exists := s.data[key]
 	if !exists {
-		UpdateDbStat(0, "keys", 1)
 		s.keyAdded(key)
 	} else {
 		// overwriting: drop the old size before adding the new one
@@ -303,7 +302,7 @@ func (s *Store) PFAdd(key string, values ...string) (changed bool, err error) {
 		e.lru = s.stampAccess(e.lru)
 	} else {
 		e = entry{encoding: EncodingHLL, hllVal: hll.New(), lru: s.stampNew()}
-		UpdateDbStat(0, "keys", 1)
+		s.keyAdded(key)
 		changed = true
 	}
 	for _, v := range values {
@@ -345,7 +344,7 @@ func (s *Store) PFMerge(dest string, sources ...string) {
 	if existed {
 		s.usedMemory -= entrySize(dest, old)
 	} else {
-		UpdateDbStat(0, "keys", 1)
+		s.keyAdded(dest)
 	}
 
 	e := entry{

@@ -64,6 +64,7 @@ func (s *Store) removeKey(key string) {
 	}
 	s.usedMemory -= entrySize(key, e)
 	delete(s.data, key)
+	s.indexRemove(key)
 	UpdateDbStat(0, "keys", -1)
 }
 
