@@ -10,12 +10,12 @@ func init() {
 }
 
 func handlePFCount(args []string) []byte {
-	if len(args) != 1 {
-		return core.EncodeError("Incorrect number of arguments for PFCount")
+	if len(args) < 1 {
+		return core.EncodeError("ERR wrong number of arguments for 'pfcount' command")
 	}
-
-	key := args[0]
-	count := store.Default.PFCount(key)
+	count, err := store.Default.PFCount(args...)
+	if err != nil {
+		return core.EncodeError(err.Error())
+	}
 	return core.EncodeInteger(count)
-
 }

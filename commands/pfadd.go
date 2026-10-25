@@ -11,7 +11,7 @@ func init() {
 
 func handlePFAdd(args []string) []byte {
 	if len(args) < 1 {
-		return core.EncodeError("Incorrect number of arguments for pfadd")
+		return core.EncodeError("ERR wrong number of arguments for 'pfadd' command")
 	}
 	key := args[0]
 	values := args[1:]

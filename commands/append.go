@@ -16,7 +16,9 @@ func handleAppend(args []string) []byte {
 	key := args[0]
 	value := args[1]
 
-	newLen := store.Default.Append(key, value)
-
+	newLen, err := store.Default.Append(key, value)
+	if err != nil {
+		return core.EncodeError(err.Error())
+	}
 	return core.EncodeInteger(newLen)
 }

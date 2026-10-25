@@ -84,6 +84,22 @@ func (s *Store) stampAccess(current uint32) uint32 {
 // holds some other kind of value. The text matches Redis's reply.
 var ErrNotHLL = errors.New("WRONGTYPE Key is not a valid HyperLogLog string value.")
 
+// ErrWrongType is returned when a command is used on a key that holds the
+// wrong kind of value. The text matches Redis's reply.
+var ErrWrongType = errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+
+// lookup returns key's entry, or false if there is none. A key that has
+// expired is removed first and reported as missing (lazy expiry), so
+// callers never see a stale value.
+func (s *Store) lookup(key string) (entry, bool) {
+	e, ok := s.data[key]
+	if ok && s.isExpired(e) {
+		s.removeKey(key)
+		return entry{}, false
+	}
+	return e, ok
+}
+
 // Default is the global store instance.
 // Never access this directly — always go through the command worker.
 var Default = New()
@@ -156,11 +172,18 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 // value. An INT-encoded key is converted to its string form first and
 // becomes RAW-encoded afterward — same as real Redis. Returns the new
 // total length, matching Redis's APPEND reply.
-func (s *Store) Append(key, value string) int64 {
-	old, exists := s.data[key]
+//
+// An expired key counts as missing. A key holding a HyperLogLog is left
+// unchanged and ErrWrongType is returned.
+func (s *Store) Append(key, value string) (int64, error) {
+	old, exists := s.lookup(key)
 	if !exists {
 		s.Set(key, value, 0)
-		return int64(len(value))
+		return int64(len(value)), nil
+	}
+	if old.encoding == EncodingHLL {
+		// A HyperLogLog has no string to append to (strVal is nil).
+		return 0, ErrWrongType
 	}
 
 	s.usedMemory -= entrySize(key, old)
@@ -181,7 +204,7 @@ func (s *Store) Append(key, value string) int64 {
 	}
 	s.data[key] = e
 	s.usedMemory += entrySize(key, e)
-	return int64(buf.Len())
+	return int64(buf.Len()), nil
 }
 
 // GetInt returns key's value as an integer, for commands like INCR. The
@@ -316,46 +339,74 @@ func (s *Store) PFAdd(key string, values ...string) (changed bool, err error) {
 }
 
 // PFCount returns the estimated number of distinct values in the
-// HyperLogLog at key, or 0 if key doesn't exist or isn't a HyperLogLog.
-func (s *Store) PFCount(key string) int64 {
-	e, ok := s.data[key]
-	if !ok || e.encoding != EncodingHLL {
-		return 0
+// HyperLogLogs at keys. With one key, that's its own count; with several,
+// it's the count of their union, computed in a temporary sketch without
+// storing anything, as in Redis. Missing or expired keys count as empty.
+// If any key holds some other kind of value, it returns ErrNotHLL.
+func (s *Store) PFCount(keys ...string) (int64, error) {
+	if len(keys) == 1 {
+		e, ok := s.lookup(keys[0])
+		if !ok {
+			return 0, nil
+		}
+		if e.encoding != EncodingHLL {
+			return 0, ErrNotHLL
+		}
+		return int64(e.hllVal.Count()), nil
 	}
-	return int64(e.hllVal.Count())
+	union := hll.New()
+	for _, key := range keys {
+		e, ok := s.lookup(key)
+		if !ok {
+			continue
+		}
+		if e.encoding != EncodingHLL {
+			return 0, ErrNotHLL
+		}
+		union.Merge(e.hllVal)
+	}
+	return int64(union.Count()), nil
 }
 
 // PFMerge stores in dest the union of the HyperLogLogs at dest and every
-// source key. Missing keys and keys of other types are ignored. dest
-// loses any expiry it had.
-func (s *Store) PFMerge(dest string, sources ...string) {
-	acc := hll.New()
-
+// source key. Missing or expired keys count as empty. If dest already
+// exists it keeps its expiry, as in Redis.
+//
+// Every key is checked before anything changes: if any of them holds some
+// other kind of value, PFMerge returns ErrNotHLL and changes nothing.
+func (s *Store) PFMerge(dest string, sources ...string) error {
 	allKeys := append([]string{dest}, sources...)
 	for _, key := range allKeys {
-		e, ok := s.data[key]
-		if !ok || e.encoding != EncodingHLL {
-			continue
+		if e, ok := s.lookup(key); ok && e.encoding != EncodingHLL {
+			return ErrNotHLL
 		}
-		acc.Merge(e.hllVal)
 	}
 
+	acc := hll.New()
+	for _, key := range allKeys {
+		if e, ok := s.data[key]; ok { // lookup above removed expired keys
+			acc.Merge(e.hllVal)
+		}
+	}
+
+	var expiresAt time.Time
 	old, existed := s.data[dest]
 	if existed {
 		s.usedMemory -= entrySize(dest, old)
+		expiresAt = old.expiresAt
 	} else {
 		s.keyAdded(dest)
 	}
 
 	e := entry{
-		encoding: EncodingHLL,
-		hllVal:   acc,
-		lru:      s.stampNew(),
-		// PFMERGE does not preserve dest's old TTL -- a fresh union
-		// value, like a plain overwrite via Set.
+		encoding:  EncodingHLL,
+		hllVal:    acc,
+		expiresAt: expiresAt,
+		lru:       s.stampNew(),
 	}
 	s.data[dest] = e
 	s.usedMemory += entrySize(dest, e)
+	return nil
 }
 
 // Delete removes keys and returns how many of them existed. Keys that had

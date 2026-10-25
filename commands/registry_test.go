@@ -74,3 +74,32 @@ func TestPFAddWrongTypeReply(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// The replies below were recorded from a real Redis 7 server.
+func TestTypeErrorsMatchRedis(t *testing.T) {
+	freshStore(t)
+	run := func(args ...string) string {
+		return string(Dispatch(&Command{Name: args[0], Args: args[1:]}))
+	}
+	const notHLL = "-WRONGTYPE Key is not a valid HyperLogLog string value.\r\n"
+	run("SET", "name", "vinay")
+	run("PFADD", "h", "a")
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"APPEND", "h", "x"}, "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"},
+		{[]string{"PFCOUNT", "name"}, notHLL},
+		{[]string{"PFMERGE", "name", "h"}, notHLL},
+		{[]string{"GET", "name"}, "$5\r\nvinay\r\n"}, // the string survived
+		{[]string{"PFCOUNT", "h", "nosuch"}, ":1\r\n"},
+		{[]string{"PFADD"}, "-ERR wrong number of arguments for 'pfadd' command\r\n"},
+		{[]string{"PFCOUNT"}, "-ERR wrong number of arguments for 'pfcount' command\r\n"},
+		{[]string{"PFMERGE"}, "-ERR wrong number of arguments for 'pfmerge' command\r\n"},
+	}
+	for _, c := range cases {
+		if got := run(c.args...); got != c.want {
+			t.Errorf("%v: got %q, want %q", c.args, got, c.want)
+		}
+	}
+}
