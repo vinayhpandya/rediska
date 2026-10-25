@@ -26,7 +26,7 @@ import (
 //
 //	age = 741 and foo2 = 1044  → node1
 //	name = 5798, {user1} = 8106 → node2
-//	visits = 13041              → node3
+//	visits = 12263              → node3
 const (
 	node1, node2, node3 = 0, 1, 2
 )
@@ -332,6 +332,25 @@ func TestCluster(t *testing.T) {
 		for node := range c.addrs {
 			expect(t, fmt.Sprintf("node%d", node+1), c.dial(t, node).do("CLUSTER", "SLOTS"), first)
 		}
+	})
+
+	t.Run("COUNTKEYSINSLOT and GETKEYSINSLOT see only local keys", func(t *testing.T) {
+		n3 := c.dial(t, node3) // {slotcheck} is slot 14446, owned by node3
+		for _, k := range []string{"{slotcheck}.a", "{slotcheck}.b", "{slotcheck}.c"} {
+			expect(t, "SET "+k, n3.do("SET", k, "1"), "OK")
+		}
+		slot := n3.do("CLUSTER", "KEYSLOT", "{slotcheck}")
+		// The owner sees all three keys; the other nodes see none.
+		expect(t, "count on owner", n3.do("CLUSTER", "COUNTKEYSINSLOT", slot), "3")
+		expect(t, "count on node1", c.dial(t, node1).do("CLUSTER", "COUNTKEYSINSLOT", slot), "0")
+		keys := n3.do("CLUSTER", "GETKEYSINSLOT", slot, "10")
+		for _, k := range []string{"{slotcheck}.a", "{slotcheck}.b", "{slotcheck}.c"} {
+			if !strings.Contains(keys, k) {
+				t.Errorf("GETKEYSINSLOT %s = %s, missing %s", slot, keys, k)
+			}
+		}
+		n3.do("DEL", "{slotcheck}.a")
+		expect(t, "count after DEL", n3.do("CLUSTER", "COUNTKEYSINSLOT", slot), "2")
 	})
 
 	t.Run("CLUSTER INFO and MYID", func(t *testing.T) {

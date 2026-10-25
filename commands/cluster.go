@@ -9,6 +9,7 @@ import (
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/config"
 	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/store"
 )
 
 func init() {
@@ -25,15 +26,12 @@ func handleCluster(args []string) []byte {
 		return core.EncodeError("ERR wrong number of arguments for 'cluster' command")
 	}
 	sub := strings.ToUpper(args[0])
-	if sub != "KEYSLOT" && len(args) != 1 {
+	arity := map[string]int{"KEYSLOT": 2, "COUNTKEYSINSLOT": 2, "GETKEYSINSLOT": 3,
+		"MYID": 1, "SLOTS": 1, "NODES": 1, "INFO": 1}
+	if want, known := arity[sub]; known && len(args) != want {
 		return core.EncodeError(fmt.Sprintf("ERR wrong number of arguments for 'cluster|%s' command", strings.ToLower(sub)))
 	}
 	switch sub {
-	case "KEYSLOT":
-		if len(args) != 2 {
-			return core.EncodeError("ERR wrong number of arguments for 'cluster|keyslot' command")
-		}
-		return core.EncodeInteger(int64(cluster.KeyHashSlot(args[1])))
 	case "MYID":
 		return core.EncodeBulkString(cluster.Current.Self.ID)
 	case "SLOTS":
@@ -42,6 +40,12 @@ func handleCluster(args []string) []byte {
 		return core.EncodeBulkString(clusterNodes(cluster.Current))
 	case "INFO":
 		return core.EncodeBulkString(clusterInfo(cluster.Current))
+	case "KEYSLOT":
+		return core.EncodeInteger(int64(cluster.KeyHashSlot(args[1])))
+	case "COUNTKEYSINSLOT":
+		return clusterCountKeysInSlot(args[1])
+	case "GETKEYSINSLOT":
+		return clusterGetKeysInSlot(args[1], args[2])
 	default:
 		return core.EncodeError(fmt.Sprintf("ERR unknown subcommand '%s'. Try CLUSTER HELP.", args[0]))
 	}
@@ -76,6 +80,32 @@ func clusterSlots(l *cluster.Layout) []byte {
 		}))
 	}
 	return core.EncodeRawArray(out)
+}
+
+func clusterCountKeysInSlot(slotArg string) []byte {
+	slot, err := strconv.ParseInt(slotArg, 10, 64)
+	if err != nil {
+		return core.EncodeError("ERR value is not an integer or out of range")
+	}
+	if slot < 0 || slot >= cluster.NumSlots {
+		return core.EncodeError("ERR Invalid slot")
+	}
+	return core.EncodeInteger(int64(store.Default.CountKeysInSlot(int(slot))))
+}
+
+func clusterGetKeysInSlot(slotArg, countArg string) []byte {
+	slot, err := strconv.ParseInt(slotArg, 10, 64)
+	if err != nil {
+		return core.EncodeError("ERR value is not an integer or out of range")
+	}
+	count, err := strconv.ParseInt(countArg, 10, 64)
+	if err != nil {
+		return core.EncodeError("ERR value is not an integer or out of range")
+	}
+	if slot < 0 || slot >= cluster.NumSlots || count < 0 {
+		return core.EncodeError("ERR Invalid slot or number of keys")
+	}
+	return core.EncodeArray(store.Default.KeysInSlot(int(slot), int(min(count, 1<<30))))
 }
 
 // clusterNodes builds the CLUSTER NODES text: one line per node.

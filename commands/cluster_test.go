@@ -7,6 +7,7 @@ import (
 
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/config"
+	"github.com/vinayhpandya/rediska/store"
 )
 
 // useThreeNodes loads the same layout as cluster.conf on your Mac, as node1.
@@ -117,5 +118,44 @@ func TestInfoClusterSection(t *testing.T) {
 	all := string(handleInfo(nil))
 	if !strings.Contains(all, "# Cluster") || !strings.Contains(all, "# Keyspace") {
 		t.Errorf("all: got %q", all)
+	}
+}
+
+func TestClusterKeysInSlot(t *testing.T) {
+	useThreeNodes(t)
+	old := store.Default
+	store.Default = store.New()
+	store.Default.EnableSlotIndex()
+	t.Cleanup(func() { store.Default = old })
+	for _, k := range []string{"{user1}.name", "{user1}.email", "{user1}.visits", "name"} {
+		store.Default.Set(k, "v", 0)
+	}
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"COUNTKEYSINSLOT", "8106"}, ":3\r\n"},
+		{[]string{"countkeysinslot", "5798"}, ":1\r\n"},
+		{[]string{"COUNTKEYSINSLOT", "0"}, ":0\r\n"},
+		{[]string{"GETKEYSINSLOT", "8106", "0"}, "*0\r\n"},
+		{[]string{"GETKEYSINSLOT", "5798", "10"}, "*1\r\n$4\r\nname\r\n"},
+		// Errors, copied from Redis 7:
+		{[]string{"COUNTKEYSINSLOT", "99999"}, "-ERR Invalid slot\r\n"},
+		{[]string{"COUNTKEYSINSLOT", "-1"}, "-ERR Invalid slot\r\n"},
+		{[]string{"COUNTKEYSINSLOT", "abc"}, "-ERR value is not an integer or out of range\r\n"},
+		{[]string{"GETKEYSINSLOT", "16384", "1"}, "-ERR Invalid slot or number of keys\r\n"},
+		{[]string{"GETKEYSINSLOT", "8106", "-1"}, "-ERR Invalid slot or number of keys\r\n"},
+		{[]string{"GETKEYSINSLOT", "8106", "x"}, "-ERR value is not an integer or out of range\r\n"},
+		{[]string{"COUNTKEYSINSLOT", "1", "2"}, "-ERR wrong number of arguments for 'cluster|countkeysinslot' command\r\n"},
+		{[]string{"GETKEYSINSLOT", "1"}, "-ERR wrong number of arguments for 'cluster|getkeysinslot' command\r\n"},
+	}
+	for _, c := range cases {
+		if got := string(handleCluster(c.args)); got != c.want {
+			t.Errorf("CLUSTER %v: got %q, want %q", c.args, got, c.want)
+		}
+	}
+	// GETKEYSINSLOT returns a limited number of keys.
+	if got := string(handleCluster([]string{"GETKEYSINSLOT", "8106", "2"})); !strings.HasPrefix(got, "*2\r\n") {
+		t.Errorf("GETKEYSINSLOT 8106 2: got %q, want 2 keys", got)
 	}
 }
