@@ -11,6 +11,7 @@ func (s *Store) EnableSlotIndex() {
 		s.indexAdd(key)
 	}
 }
+
 // keyAdded does the bookkeeping for a brand-new key: it bumps the key
 // count for INFO and indexes the key. Every place that creates a key must
 // call it, just as every deletion goes through removeKey.
@@ -19,7 +20,7 @@ func (s *Store) keyAdded(key string) {
 	s.indexAdd(key)
 }
 
-func (s *Store) indexAdd(key string){
+func (s *Store) indexAdd(key string) {
 	if s.slots == nil {
 		return // Cluster mode is turned off
 	}
@@ -37,7 +38,7 @@ func (s *Store) indexRemove(key string) {
 	slot := cluster.KeyHashSlot(key)
 	delete(s.slots[slot], key)
 	if len(s.slots[slot]) == 0 {
-		s.slots[slot] = nil          // free the map once the slot is empty
+		s.slots[slot] = nil // free the map once the slot is empty
 	}
 }
 
