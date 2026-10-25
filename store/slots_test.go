@@ -55,19 +55,13 @@ func TestSlotIndexStaysCorrect(t *testing.T) {
 	s.EnableSlotIndex()
 
 	rng := rand.New(rand.NewSource(1))
-	// String keys and HyperLogLog keys use separate names: APPEND on a
-	// HyperLogLog key is a separate, known bug, not what this test is about.
+	// Strings and HyperLogLogs share key names on purpose, so commands also
+	// hit keys of the wrong type (which must be refused without side effects).
 	key := func() string {
 		if rng.Intn(4) == 0 {
 			return fmt.Sprintf("{tag%d}.k%d", rng.Intn(5), rng.Intn(20)) // shared slots
 		}
 		return fmt.Sprintf("k%d", rng.Intn(300))
-	}
-	hllKey := func() string {
-		if rng.Intn(4) == 0 {
-			return fmt.Sprintf("{tag%d}.h%d", rng.Intn(5), rng.Intn(10))
-		}
-		return fmt.Sprintf("h%d", rng.Intn(100))
 	}
 	for i := 0; i < 5000; i++ {
 		var step string
@@ -89,11 +83,11 @@ func TestSlotIndexStaysCorrect(t *testing.T) {
 			s.Delete(k)
 			step = "DEL " + k
 		case 5:
-			k := hllKey()
+			k := key()
 			s.PFAdd(k, "a")
 			step = "PFADD " + k
 		case 6:
-			d, a, b := hllKey(), hllKey(), hllKey()
+			d, a, b := key(), key(), key()
 			s.PFMerge(d, a, b)
 			step = "PFMERGE " + d
 		case 7:
