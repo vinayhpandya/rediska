@@ -40,6 +40,7 @@ type Store struct {
 	usedMemory int64               // running byte estimate, kept in sync by Set/removeKey
 	evPool     []evictionCandidate // eviction pool, persists across cycles
 	policy     string              // active maxmemory-policy; see SetPolicy
+	slots      *slotIndex
 }
 
 // New returns an empty Store using the noeviction policy.
@@ -125,6 +126,7 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 	old, exists := s.data[key]
 	if !exists {
 		UpdateDbStat(0, "keys", 1)
+		s.keyAdded(key)
 	} else {
 		// overwriting: drop the old size before adding the new one
 		s.usedMemory -= entrySize(key, old)
