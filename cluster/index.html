@@ -1279,7 +1279,9 @@ the bus by hand:</p>
 </code></pre></div>
 <p>The reply is a <code>PONG</code> carrying node1's ID, name and address.</p>
 <p>Bus work runs on the same goroutine as client commands, so cluster state,
-like the data, needs no locks.</p>
+like the data, needs no locks. See
+<a href="../design-decisions/#goroutines-in-a-cluster-node">Goroutines in a cluster node</a>
+for which goroutine does what.</p>
 <h2 id="transactions">Transactions<a class="headerlink" href="#transactions" title="Permanent link">&para;</a></h2>
 <p>All keys in a <code>MULTI</code>/<code>EXEC</code> transaction must be in <strong>one slot</strong>, owned by
 the node you're connected to. Rediska checks this in two places, as Redis

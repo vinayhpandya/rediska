@@ -602,6 +602,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#goroutines-in-a-cluster-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goroutines in a cluster node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bus-events-go-through-the-dispatch-worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bus events go through the dispatch worker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-worker-never-waits-on-the-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The worker never waits on the network
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1170,6 +1203,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#goroutines-in-a-cluster-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goroutines in a cluster node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bus-events-go-through-the-dispatch-worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bus events go through the dispatch worker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-worker-never-waits-on-the-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The worker never waits on the network
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1216,6 +1282,7 @@ why, and what it costs.</p>
     G1 -- "command / pipeline / MULTI batch" --&gt; CH[(channel)]
     G2 --&gt; CH
     E[active expiry, every 100 ms] --&gt; CH
+    B[cluster bus] -- "bus events" --&gt; CH
     CH --&gt; W[dispatch worker]
     W --&gt; D[Dispatch:&lt;br/&gt;cluster check, memory check,&lt;br/&gt;handler, AOF]
     D --&gt; S[(store)]</code></pre>
@@ -1227,6 +1294,10 @@ why, and what it costs.</p>
 <li>The worker runs commands one at a time: cluster check, memory check,
    the command's handler, then the AOF write. The reply goes back to the
    connection.</li>
+<li>In cluster mode, the <a href="../cluster/#the-cluster-bus">cluster bus</a> sends its
+   events over the same channel, so the worker also runs the bus's
+   decisions, between commands (see
+   <a href="#goroutines-in-a-cluster-node">Goroutines in a cluster node</a>).</li>
 </ol>
 <h2 id="one-worker-goroutine-for-all-data">One worker goroutine for all data<a class="headerlink" href="#one-worker-goroutine-for-all-data" title="Permanent link">&para;</a></h2>
 <p><strong>Choice:</strong> every command runs on one goroutine, like Redis's single
@@ -1300,12 +1371,161 @@ would silently drop those keys.</p>
 <p><strong>Choice:</strong> a node's 40-character ID is the SHA-1 of its name.</p>
 <p><strong>Why:</strong> tools expect IDs of that shape, and deriving them from names keeps
 them the same across restarts without storing anything.</p>
+<h3 id="goroutines-in-a-cluster-node">Goroutines in a cluster node<a class="headerlink" href="#goroutines-in-a-cluster-node" title="Permanent link">&para;</a></h3>
+<p>A cluster node runs the goroutines below. Only the <strong>dispatch worker</strong>
+reads or changes data and cluster state; every other goroutine waits on
+something (a socket, a timer, a channel) and passes what happened on.</p>
+<pre class="mermaid"><code>flowchart LR
+    subgraph clients["Client side"]
+        CG["connection goroutine&lt;br/&gt;(one per client)"]
+        AE["active expiry"]
+    end
+    subgraph bus["Cluster bus"]
+        CR["cronLoop"]
+        AL["acceptLoop"]
+        DL["dialLoop"]
+        DI["dial&lt;br/&gt;(one per attempt)"]
+        RL["readLoop&lt;br/&gt;(one per connection)"]
+        WR["writer&lt;br/&gt;(one per connection)"]
+    end
+    CH[("commandCh")]
+    W["dispatch worker"]
+
+    CG -- commands --&gt; CH
+    AE -- "expiry job" --&gt; CH
+    CR -- "EvTick" --&gt; CH
+    DI -- "EvLinkUp / EvDialFailed" --&gt; CH
+    RL -- "EvMessage / EvLinkDown" --&gt; CH
+    CH --&gt; W
+
+    W -- "dialReq (from tick)" --&gt; DL
+    DL -- starts --&gt; DI
+    DI -- "starts both" --&gt; RL
+    DI -. "starts" .-&gt; WR
+    AL -- "starts both" --&gt; RL
+    W -- "link.send: the outbox" --&gt; WR</code></pre>
+<p>Read it left to right: everything flows into <code>commandCh</code>, the worker
+decides, and it acts on the network only by asking <code>dialLoop</code> for a
+connection or putting a message in a connection's outbox.</p>
+<table>
+<thead>
+<tr>
+<th>Goroutine</th>
+<th>Started by</th>
+<th>How many</th>
+<th>Waits for</th>
+<th>Then</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>connection goroutine</td>
+<td><code>server.Run</code></td>
+<td>one per client</td>
+<td>the client's next command</td>
+<td>sends it to the worker</td>
+</tr>
+<tr>
+<td>active expiry</td>
+<td><code>server.Run</code></td>
+<td>1</td>
+<td>a 100 ms timer</td>
+<td>sends an expiry job</td>
+</tr>
+<tr>
+<td>dispatch worker</td>
+<td><code>server.Run</code></td>
+<td>1</td>
+<td>the next request on <code>commandCh</code></td>
+<td>runs it: a command, or <code>Bus.Handle</code> for a bus event</td>
+</tr>
+<tr>
+<td><code>cronLoop</code></td>
+<td><code>Bus.Start</code></td>
+<td>1</td>
+<td>a 100 ms timer</td>
+<td>sends <code>EvTick</code></td>
+</tr>
+<tr>
+<td><code>acceptLoop</code></td>
+<td><code>Bus.Start</code></td>
+<td>1</td>
+<td>another node connecting to the bus port</td>
+<td>starts a <code>readLoop</code> and a writer for it</td>
+</tr>
+<tr>
+<td><code>dialLoop</code></td>
+<td><code>Bus.Start</code></td>
+<td>1</td>
+<td>a node on <code>dialReq</code> (from <code>tick</code>)</td>
+<td>starts a <code>dial</code></td>
+</tr>
+<tr>
+<td>shutdown helper</td>
+<td><code>Bus.Start</code></td>
+<td>1</td>
+<td>shutdown</td>
+<td>closes the bus listener, which stops <code>acceptLoop</code></td>
+</tr>
+<tr>
+<td><code>dial</code></td>
+<td><code>dialLoop</code></td>
+<td>one per attempt, short-lived</td>
+<td>the TCP connection</td>
+<td>starts a <code>readLoop</code> and a writer, sends <code>EvLinkUp</code>, or <code>EvDialFailed</code></td>
+</tr>
+<tr>
+<td><code>readLoop</code></td>
+<td><code>dial</code> or <code>acceptLoop</code></td>
+<td>one per bus connection</td>
+<td>the next message</td>
+<td>sends <code>EvMessage</code>; when the connection closes, <code>EvLinkDown</code></td>
+</tr>
+<tr>
+<td>writer</td>
+<td><code>startLink</code></td>
+<td>one per bus connection</td>
+<td>a message in the outbox</td>
+<td>writes it to the socket</td>
+</tr>
+</tbody>
+</table>
+<p>In a 3-node cluster, each node has 4 bus connections (2 it dialled, 2
+dialled to it), so 8 per-connection goroutines plus 4 fixed ones.</p>
+<h3 id="bus-events-go-through-the-dispatch-worker">Bus events go through the dispatch worker<a class="headerlink" href="#bus-events-go-through-the-dispatch-worker" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> the bus's goroutines never change cluster state. They describe
+what happened as an <code>Event</code> (<code>EvTick</code>, <code>EvLinkUp</code>, <code>EvMessage</code>, …) and send
+it over <code>commandCh</code>, the same channel as client commands. The worker calls
+<code>Bus.Handle</code>, a single <code>switch</code> that lists every kind of event.</p>
+<p><strong>Why:</strong> the "one goroutine owns the state" rule now covers cluster state
+too, so there are no locks there either. Events rather than closures keep
+every job the bus can ask for in one place, and an event can be logged. The
+<code>cluster</code> package can't import <code>server</code> (that would be an import cycle), so
+<code>Bus.Start</code> is handed a <code>func(Event)</code> that knows about <code>commandCh</code>.</p>
+<p><strong>Cost:</strong> bus work waits its turn behind client commands, so a PING can be
+a little late under heavy load. Every new kind of bus job needs an event
+kind and a <code>case</code> in <code>Handle</code>.</p>
+<h3 id="the-worker-never-waits-on-the-network">The worker never waits on the network<a class="headerlink" href="#the-worker-never-waits-on-the-network" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> the worker never writes to a socket or dials. To send, it puts
+the message in the connection's outbox, and that connection's writer
+goroutine writes it. To connect, <code>tick</code> asks <code>dialLoop</code>, which starts a
+<code>dial</code>. If an outbox is full, the message is dropped.</p>
+<p><strong>Why:</strong> a slow or dead node must never stall client commands, which all
+queue behind the worker. Only <code>dialLoop</code> starts <code>dial</code> goroutines because
+the worker isn't counted in the bus's <code>WaitGroup</code>: starting goroutines from
+it could race with <code>Wait</code> at shutdown.</p>
+<p><strong>Cost:</strong> a message to a stuck node can be lost. That's fine for <code>PING</code>,
+which is sent again a second later; anything sent over the bus must be
+safe to lose.</p>
 <h2 id="tests-start-real-processes">Tests start real processes<a class="headerlink" href="#tests-start-real-processes" title="Permanent link">&para;</a></h2>
 <p><strong>Choice:</strong> the end-to-end test starts three real <code>rediska</code> processes
 instead of three servers inside one test.</p>
 <p><strong>Why:</strong> the store and the cluster layout are package-level variables, so
 three nodes in one process would share one store. Separate processes test
 exactly what you run. See <a href="../testing/">Testing</a>.</p>
+<p>The cluster bus is the exception: a <code>Bus</code> keeps its own state, so
+<code>cluster/bus_test.go</code> runs three buses in one process, each with a small
+stand-in for the dispatch worker, under the race detector.</p>
 
 
 
