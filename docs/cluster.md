@@ -147,14 +147,18 @@ Over the bus, each node:
 - notices when a connection closes, shows that node as `disconnected`, and
   reconnects by itself when it comes back
 
-Messages use RESP, the same format as client commands, so you can talk to
-the bus by hand:
+Messages use RESP, the same format as client commands. Each one is an array
+of 7 items: type, the sender's ID, name, address and flags, the sender's own
+slots (as start/end pairs), and a gossip section listing other nodes. You can
+talk to the bus by hand:
 
 ```console
-$ (printf '*4\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n'; sleep 1) | nc localhost 17001
+$ (printf '*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n'; sleep 1) | nc localhost 17001
 ```
 
-The reply is a `PONG` carrying node1's ID, name and address.
+The reply is a `PONG` carrying node1's ID, name, address and slots
+(`0 5460`). Nodes don't act on the slots or gossip sections yet; they're
+there for gossip, which comes next.
 
 Bus work runs on the same goroutine as client commands, so cluster state,
 like the data, needs no locks. See

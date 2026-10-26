@@ -147,9 +147,11 @@ func (b *Bus) Peers() []*Peer {
 func (b *Bus) Peer(id string) *Peer { return b.peers[id] }
 
 // self builds a message from this node: b.self("PING") or b.self("PONG").
+// The header carries this node's own slots. The gossip section is empty
+// for now; receivers don't act on either yet.
 func (b *Bus) self(typ string) Message {
 	s := b.layout.Self
-	return Message{Type: typ, ID: s.ID, Name: s.Name, Addr: s.Addr}
+	return Message{Type: typ, ID: s.ID, Name: s.Name, Addr: s.Addr, Slots: s.Slots}
 }
 
 // ======================================================= network goroutines
