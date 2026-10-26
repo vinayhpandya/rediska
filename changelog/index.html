@@ -451,6 +451,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../performance/" class="md-nav__link">
         
   
@@ -829,6 +857,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#milestone-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#milestone-15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1056,6 +1095,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#milestone-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#milestone-15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1270,6 +1320,22 @@
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <p>How Rediska was built, one milestone at a time (newest first).</p>
+<h2 id="milestone-16">Milestone 16<a class="headerlink" href="#milestone-16" title="Permanent link">&para;</a></h2>
+<p>Releases with GoReleaser and Homebrew</p>
+<ol>
+<li>Pushing a <code>v*</code> tag runs <code>.github/workflows/release.yml</code>: it tests, then
+   GoReleaser builds macOS, Linux and Windows binaries (Intel and ARM) and
+   publishes a GitHub Release with checksums and a changelog</li>
+<li>Each release updates the cask in <code>vinayhpandya/homebrew-tap</code>, so
+   <code>brew install vinayhpandya/tap/rediska</code> works</li>
+<li>Added <code>rediska --version</code>, filled in at build time</li>
+<li>Added an MIT <code>LICENSE</code>, shipped in every archive</li>
+<li>New <a href="../releasing/">Releasing</a> page; the install guide now covers
+   Homebrew, downloads and <code>go install</code></li>
+</ol>
+<p>Try it:</p>
+<div class="highlight"><pre><span></span><code>goreleaser release --snapshot --clean    # builds everything into dist/, publishes nothing
+</code></pre></div>
 <h2 id="milestone-15">Milestone 15<a class="headerlink" href="#milestone-15" title="Permanent link">&para;</a></h2>
 <p>Cluster bus: nodes check on each other (Phase 4a)</p>
 <ol>
