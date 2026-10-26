@@ -2,6 +2,38 @@
 
 How Rediska was built, one milestone at a time (newest first).
 
+## Milestone 15
+
+Cluster bus: nodes check on each other (Phase 4a)
+
+1. Every node listens on a second port, its client port + 10000, for other
+   nodes only. Messages are RESP arrays, so `nc` can talk to it
+2. Each node connects to every other node in the layout, retries every
+   second while one is down, and reconnects by itself when it comes back
+3. Nodes send each other `PING` once a second and answer with `PONG`
+4. `CLUSTER NODES` shows real ping-sent and pong-received times, and
+   `connected` / `disconnected`
+5. The bus's goroutines only wait and pass events on (`EvTick`, `EvLinkUp`,
+   `EvMessage`, ...). The dispatch worker handles them, so cluster state
+   needs no locks, like the data
+6. The worker never waits on the network: messages go through a
+   per-connection outbox and writer goroutine, and dials through `dialLoop`
+7. `cluster/bus_test.go` runs three buses in one process under `-race`
+
+Try it:
+
+    ./scripts/cluster.sh start
+    redis-cli -p 7001 cluster nodes        # pong times move every second
+    lsof -ti :7002 | xargs kill            # node2 shows disconnected
+    ./scripts/cluster.sh stop
+
+TODO
+
+1. No gossip or `CLUSTER MEET` yet: every node reads the full layout (Phase 4b)
+2. No failure detection: a stopped node shows `disconnected`, but nodes
+   don't agree that it has failed (Phase 4d)
+3. Finding itself by port still only works on one machine
+
 ## Milestone 14
 
 Fixed-layout cluster with redirects (Phase 2)

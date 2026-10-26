@@ -157,7 +157,9 @@ $ (printf '*4\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\
 The reply is a `PONG` carrying node1's ID, name and address.
 
 Bus work runs on the same goroutine as client commands, so cluster state,
-like the data, needs no locks.
+like the data, needs no locks. See
+[Goroutines in a cluster node](design-decisions.md#goroutines-in-a-cluster-node)
+for which goroutine does what.
 
 ## Transactions
 
