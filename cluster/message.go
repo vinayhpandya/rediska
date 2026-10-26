@@ -8,7 +8,7 @@ import (
 
 type Message struct {
 	Type string
-	ID string
+	ID   string
 	Name string
 	Addr string
 }
@@ -17,7 +17,7 @@ func (m *Message) encode() []byte {
 	return core.EncodeArray([]string{m.Type, m.ID, m.Name, m.Addr})
 }
 
-func decodeMessage(v any) (Message, error){
+func decodeMessage(v any) (Message, error) {
 	arr, ok := v.([]any)
 	if !ok || len(arr) != 4 {
 		return Message{}, fmt.Errorf("cluster bus: want an array of 4, got %v", v)

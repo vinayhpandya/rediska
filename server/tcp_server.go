@@ -34,7 +34,7 @@ type CommandRequest struct {
 	batch    []*commands.Command // MULTI/EXEC: dispatched as one array-wrapped reply
 	pipeline []*commands.Command // pipelined commands: dispatched as concatenated individual replies
 	replych  chan []byte
-	fn func()
+	fn       func()
 }
 
 // replyChPool reuses reply channels across commands instead of allocating a
@@ -91,15 +91,15 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 	listener, err := net.Listen("tcp", addr)
 	var bus *cluster.Bus
 	if cluster.Current != nil { // cluster mode is on
-	bus = cluster.NewBus(cluster.Current)
-	if err := bus.Listen(host); err != nil {
-		listener.Close()
-		if aof != nil {
-			aof.Close()
+		bus = cluster.NewBus(cluster.Current)
+		if err := bus.Listen(host); err != nil {
+			listener.Close()
+			if aof != nil {
+				aof.Close()
+			}
+			return err
 		}
-		return err
 	}
-}
 	if err != nil {
 		if aof != nil {
 			aof.Close()

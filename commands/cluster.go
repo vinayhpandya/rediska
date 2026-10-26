@@ -126,7 +126,7 @@ func clusterNodes(l *cluster.Layout) string {
 		}
 		pingSent, pongRecv, link := nodeLinkInfo(l, n)
 		fmt.Fprintf(&b, "%s %s:%d@%d %s - %d %d %d %s",
-		n.ID, host, port, cluster.BusPort(port), flags, pingSent, pongRecv, i+1, link)
+			n.ID, host, port, cluster.BusPort(port), flags, pingSent, pongRecv, i+1, link)
 		for _, r := range n.Slots {
 			if r.Start == r.End {
 				fmt.Fprintf(&b, " %d", r.Start)
