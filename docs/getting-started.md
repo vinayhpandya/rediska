@@ -2,6 +2,30 @@
 
 ## Install
 
+### Homebrew (macOS)
+
+```bash
+brew install vinayhpandya/tap/rediska
+```
+
+This downloads a ready-built binary from the latest
+[release](https://github.com/vinayhpandya/rediska/releases), so you don't need
+Go. If Homebrew complains it doesn't understand the cask, run `brew update`
+first. Upgrade later with `brew upgrade rediska`.
+
+### Download a binary (macOS, Linux, Windows)
+
+Every [release](https://github.com/vinayhpandya/rediska/releases) has a
+`.tar.gz` (`.zip` on Windows) for Intel and ARM machines, plus a
+`checksums.txt`. Unpack it and put `rediska` somewhere on your `PATH`:
+
+```bash
+tar -xzf rediska_0.1.0_linux_amd64.tar.gz
+sudo mv rediska /usr/local/bin/
+```
+
+### With Go
+
 You need [Go](https://go.dev/dl/) 1.25 or newer.
 
 ```bash
@@ -17,8 +41,15 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
 !!! note
-`@latest` installs the newest tagged release. To try the newest code on
-the `main` branch instead, use `@main`.
+    `@latest` installs the newest tagged release. To try the newest code on
+    the `main` branch instead, use `@main`.
+
+### Check it worked
+
+```console
+$ rediska --version
+rediska 0.1.0 (commit 1a2b3c4, built 2026-10-26T03:00:00Z)
+```
 
 ### From source
 
@@ -99,6 +130,7 @@ rediska --port 7379 --maxmemory 100 --maxmemory-policy allkeys-lru
 | `--cluster-node-name`   |              | this node's name in the layout file (default: find it by `--port`) |
 | `--cluster-config-file` |              | cluster layout file (required with `--cluster-enabled`)            |
 | `--pprof-addr`          | off          | serve Go's profiler, e.g. `localhost:6060`                         |
+| `--version`             |              | print the version and exit                                         |
 
 ## Run a cluster
 

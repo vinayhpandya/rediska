@@ -15,6 +15,7 @@
 //	--maxmemory-policy POLICY    noeviction, allkeys-lru, allkeys-lfu or volatile-lfu
 //	--cluster-enabled            run as a cluster node
 //	--cluster-config-file FILE   cluster layout; required with --cluster-enabled
+//	--version                    print the version and exit
 //
 // Run rediska -h for the full list.
 package main
@@ -28,6 +29,7 @@ import (
 	_ "net/http/pprof" // <-- ADDED: registers /debug/pprof/* handlers
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/vinayhpandya/rediska/cluster"
@@ -37,6 +39,30 @@ import (
 )
 
 var pprofAddr string // <-- ADDED
+
+// Set at build time by GoReleaser (see .goreleaser.yaml), for example:
+//
+//	go build -ldflags "-X main.version=v0.1.0 -X main.commit=abc1234 -X main.date=2026-10-25"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+var showVersion bool
+
+// versionString describes this build. A release build uses the values
+// GoReleaser set; "go install ...@v0.1.0" falls back to the module version
+// Go records in the binary.
+func versionString() string {
+	v := version
+	if v == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			v = info.Main.Version
+		}
+	}
+	return fmt.Sprintf("rediska %s (commit %s, built %s)", v, commit, date)
+}
 
 func setUpFlags() {
 	flag.IntVar(&config.Port, "port", 7379, "Port for rediska")
@@ -53,11 +79,16 @@ func setUpFlags() {
 	flag.StringVar(&config.ClusterConfigFile, "cluster-config-file", "", "Cluster layout file (needed with --cluster-enabled)")
 	flag.StringVar(&pprofAddr, "pprof-addr", "", "If set, expose net/http/pprof on this address (e.g. localhost:6060). Disabled by default.")
 	flag.StringVar(&config.ClusterNodeName, "cluster-node-name", "", "This node's name in the cluster layout file (default: find it by --port)")
+	flag.BoolVar(&showVersion, "version", false, "Print the version and exit")
 	flag.Parse()
 }
 
 func main() {
 	setUpFlags()
+	if showVersion {
+		fmt.Println(versionString())
+		return
+	}
 	if config.ClusterEnabled {
 		if config.ClusterConfigFile == "" {
 			log.Fatal("--cluster-enabled needs --cluster-config-file")

@@ -1,0 +1,50 @@
+# Release: when you push a version tag, build Rediska for every platform,
+# publish a GitHub Release, and update the Homebrew tap.
+#
+#   git tag v0.1.0
+#   git push origin v0.1.0
+#
+# What gets built and where it goes is in .goreleaser.yaml.
+name: release
+
+on:
+    push:
+        tags: ["v*"]
+
+# Creating a GitHub Release needs write access to this repo's contents.
+permissions:
+    contents: write
+
+jobs:
+    goreleaser:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+
+        steps:
+            - name: Check out the code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # full history, so GoReleaser can write the changelog
+
+            - name: Set up Go (version from go.mod)
+              uses: actions/setup-go@v5
+              with:
+                  go-version-file: go.mod
+                  cache: false # no dependencies (no go.sum), so nothing to cache
+
+            - name: Test before releasing (with the race detector)
+              run: go test -race -count=1 ./...
+
+            - name: Build and publish with GoReleaser
+              uses: goreleaser/goreleaser-action@v7
+              with:
+                  distribution: goreleaser
+                  version: "~> v2"
+                  args: release --clean
+              env:
+                  # Creates the GitHub Release in this repo.
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Pushes the cask to vinayhpandya/homebrew-tap. GITHUB_TOKEN
+                  # can't write to other repos, so this is a separate token
+                  # (fine-grained, Contents: read and write on the tap only).
+                  HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

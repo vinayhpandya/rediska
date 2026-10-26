@@ -2,6 +2,18 @@
 
 This repository is for writing down all the essential details about redis and how it will be implemented in go or any other language
 
+## Install
+
+```bash
+brew install vinayhpandya/tap/rediska              # macOS
+go install github.com/vinayhpandya/rediska@latest  # anywhere, with Go 1.25+
+```
+
+Or download a binary for macOS, Linux or Windows from the
+[releases page](https://github.com/vinayhpandya/rediska/releases). See the
+[docs](https://vinayhpandya.github.io/rediska/) for how to run it, and
+[Releasing](docs/releasing.md) for how releases are made.
+
 ## Milestone 1
 
 Build a simple tcp echo server which serves echoes the command back to the user
