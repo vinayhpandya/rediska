@@ -1301,11 +1301,15 @@ command gets its own reply, in order.</p>
 <li>notices when a connection closes, shows that node as <code>disconnected</code>, and
   reconnects by itself when it comes back</li>
 </ul>
-<p>Messages use RESP, the same format as client commands, so you can talk to
-the bus by hand:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span><span class="o">(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">'*4\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n'</span><span class="p">;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">1</span><span class="o">)</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>localhost<span class="w"> </span><span class="m">17001</span>
+<p>Messages use RESP, the same format as client commands. Each one is an array
+of 7 items: type, the sender's ID, name, address and flags, the sender's own
+slots (as start/end pairs), and a gossip section listing other nodes. You can
+talk to the bus by hand:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span><span class="o">(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">'*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n'</span><span class="p">;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">1</span><span class="o">)</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>localhost<span class="w"> </span><span class="m">17001</span>
 </code></pre></div>
-<p>The reply is a <code>PONG</code> carrying node1's ID, name and address.</p>
+<p>The reply is a <code>PONG</code> carrying node1's ID, name, address and slots
+(<code>0 5460</code>). Nodes don't act on the slots or gossip sections yet; they're
+there for gossip, which comes next.</p>
 <p>Bus work runs on the same goroutine as client commands, so cluster state,
 like the data, needs no locks. See
 <a href="../design-decisions/#goroutines-in-a-cluster-node">Goroutines in a cluster node</a>

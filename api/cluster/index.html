@@ -801,6 +801,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#type-gossipentry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        type GossipEntry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#type-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -877,6 +888,17 @@
     <span class="md-ellipsis">
       
         type Node
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-nodeflags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        type NodeFlags
       
     </span>
   </a>
@@ -1359,6 +1381,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#type-gossipentry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        type GossipEntry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#type-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1435,6 +1468,17 @@
     <span class="md-ellipsis">
       
         type Node
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#type-nodeflags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        type NodeFlags
       
     </span>
   </a>
@@ -1522,6 +1566,7 @@
 <li><a href="#Bus.Wait">func (b *Bus) Wait()</a></li>
 <li><a href="#Event">type Event</a></li>
 <li><a href="#EventKind">type EventKind</a></li>
+<li><a href="#GossipEntry">type GossipEntry</a></li>
 <li><a href="#Layout">type Layout</a></li>
 <li><a href="#LoadLayout">func LoadLayout(path string, myPort int, myName string) (*Layout, error)</a></li>
 <li><a href="#ParseLayout">func ParseLayout(r io.Reader, myPort int) (*Layout, error)</a></li>
@@ -1529,6 +1574,7 @@
 <li><a href="#Layout.Owner">func (l *Layout) Owner(slot int) *Node</a></li>
 <li><a href="#Message">type Message</a></li>
 <li><a href="#Node">type Node</a></li>
+<li><a href="#NodeFlags">type NodeFlags</a></li>
 <li><a href="#Peer">type Peer</a></li>
 <li><a href="#Peer.Connected">func (p *Peer) Connected() bool</a></li>
 <li><a href="#SlotRange">type SlotRange</a></li>
@@ -1665,65 +1711,77 @@ Every key maps to one of 16384 slots. Keys that share a \{hash tag\} always land
 <a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">    </span><span class="nx">EvLinkDown</span><span class="w">                    </span><span class="c1">// a dialed connection closed: ID, Link</span>
 <a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="p">)</span>
 </code></pre></div>
+<p><a name="GossipEntry"></a></p>
+<h2 id="type-gossipentry">type GossipEntry<a class="headerlink" href="#type-gossipentry" title="Permanent link">&para;</a></h2>
+<p>GossipEntry is what the sender knows about one other node.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">GossipEntry</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">    </span><span class="nx">ID</span><span class="w">       </span><span class="kt">string</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nx">Name</span><span class="w">     </span><span class="kt">string</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">     </span><span class="kt">string</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="nx">Flags</span><span class="w">    </span><span class="nx">NodeFlags</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span><span class="nx">PingSent</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="c1">// Unix ms of the sender's unanswered PING to it, 0 if none</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span><span class="nx">PongRecv</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="c1">// Unix ms of the last PONG the sender got from it, 0 if never</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="p">}</span>
+</code></pre></div>
 <p><a name="Layout"></a></p>
 <h2 id="type-layout">type Layout<a class="headerlink" href="#type-layout" title="Permanent link">&para;</a></h2>
 <p>Layout is the whole cluster as seen by this node.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Layout</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">    </span><span class="nx">Nodes</span><span class="w"> </span><span class="p">[]</span><span class="o">*</span><span class="nx">Node</span>
-<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nx">Self</span><span class="w">  </span><span class="o">*</span><span class="nx">Node</span>
-<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
-<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Layout</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">    </span><span class="nx">Nodes</span><span class="w"> </span><span class="p">[]</span><span class="o">*</span><span class="nx">Node</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="nx">Self</span><span class="w">  </span><span class="o">*</span><span class="nx">Node</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Current"></a>Current is the layout loaded at startup. It is nil when cluster mode is off.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">Current</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">Current</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span>
 </code></pre></div>
 <p><a name="LoadLayout"></a></p>
 <h3 id="func-loadlayout">func LoadLayout<a class="headerlink" href="#func-loadlayout" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">LoadLayout</span><span class="p">(</span><span class="nx">path</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">myName</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">LoadLayout</span><span class="p">(</span><span class="nx">path</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">myName</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <p>LoadLayout reads the cluster layout file at path. myPort is this node's port, used to find which line of the file describes this node.</p>
 <p><a name="ParseLayout"></a></p>
 <h3 id="func-parselayout">func ParseLayout<a class="headerlink" href="#func-parselayout" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">ParseLayout</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">ParseLayout</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <details><summary>Example</summary>
 <p>
 
 A layout lists every node and the slots it owns. The node finds itself by its port, and Owner says which node serves a slot.
 
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">    </span><span class="s">"fmt"</span>
-<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">    </span><span class="s">"strings"</span>
-<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
-<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">    </span><span class="s">"github.com/vinayhpandya/rediska/cluster"</span>
-<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="p">)</span>
-<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>
-<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="w">    </span><span class="nx">conf</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">`</span>
-<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="s">node1  127.0.0.1:7001  0-5460</span>
-<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="s">node2  127.0.0.1:7002  5461-10922</span>
-<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="s">node3  127.0.0.1:7003  10923-16383</span>
-<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="s">`</span>
-<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="w">    </span><span class="nx">layout</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">cluster</span><span class="p">.</span><span class="nx">ParseLayout</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">NewReader</span><span class="p">(</span><span class="nx">conf</span><span class="p">),</span><span class="w"> </span><span class="mi">7001</span><span class="p">)</span>
-<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="w">        </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"error:"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
-<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="w">        </span><span class="k">return</span>
-<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a><span class="w">    </span><span class="nx">slot</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">cluster</span><span class="p">.</span><span class="nx">KeyHashSlot</span><span class="p">(</span><span class="s">"name"</span><span class="p">)</span>
-<a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a><span class="w">    </span><span class="nx">owner</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">layout</span><span class="p">.</span><span class="nx">Owner</span><span class="p">(</span><span class="nx">slot</span><span class="p">)</span>
-<a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"I am"</span><span class="p">,</span><span class="w"> </span><span class="nx">layout</span><span class="p">.</span><span class="nx">Self</span><span class="p">.</span><span class="nx">Name</span><span class="p">)</span>
-<a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"slot"</span><span class="p">,</span><span class="w"> </span><span class="nx">slot</span><span class="p">,</span><span class="w"> </span><span class="s">"is owned by"</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span><span class="w"> </span><span class="s">"at"</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="p">.</span><span class="nx">Addr</span><span class="p">)</span>
-<a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"is it mine?"</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">layout</span><span class="p">.</span><span class="nx">Self</span><span class="p">)</span>
-<a id="__codelineno-24-26" name="__codelineno-24-26" href="#__codelineno-24-26"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="s">"fmt"</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">    </span><span class="s">"strings"</span>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span><span class="s">"github.com/vinayhpandya/rediska/cluster"</span>
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="p">)</span>
+<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>
+<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="w">    </span><span class="nx">conf</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">`</span>
+<a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="s">node1  127.0.0.1:7001  0-5460</span>
+<a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="s">node2  127.0.0.1:7002  5461-10922</span>
+<a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="s">node3  127.0.0.1:7003  10923-16383</span>
+<a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a><span class="s">`</span>
+<a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="w">    </span><span class="nx">layout</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">cluster</span><span class="p">.</span><span class="nx">ParseLayout</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">NewReader</span><span class="p">(</span><span class="nx">conf</span><span class="p">),</span><span class="w"> </span><span class="mi">7001</span><span class="p">)</span>
+<a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="w">        </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"error:"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="w">        </span><span class="k">return</span>
+<a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a><span class="w">    </span><span class="nx">slot</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">cluster</span><span class="p">.</span><span class="nx">KeyHashSlot</span><span class="p">(</span><span class="s">"name"</span><span class="p">)</span>
+<a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a><span class="w">    </span><span class="nx">owner</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">layout</span><span class="p">.</span><span class="nx">Owner</span><span class="p">(</span><span class="nx">slot</span><span class="p">)</span>
+<a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"I am"</span><span class="p">,</span><span class="w"> </span><span class="nx">layout</span><span class="p">.</span><span class="nx">Self</span><span class="p">.</span><span class="nx">Name</span><span class="p">)</span>
+<a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"slot"</span><span class="p">,</span><span class="w"> </span><span class="nx">slot</span><span class="p">,</span><span class="w"> </span><span class="s">"is owned by"</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span><span class="w"> </span><span class="s">"at"</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="p">.</span><span class="nx">Addr</span><span class="p">)</span>
+<a id="__codelineno-25-25" name="__codelineno-25-25" href="#__codelineno-25-25"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">"is it mine?"</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nx">layout</span><span class="p">.</span><span class="nx">Self</span><span class="p">)</span>
+<a id="__codelineno-25-26" name="__codelineno-25-26" href="#__codelineno-25-26"></a><span class="p">}</span>
 </code></pre></div>
 
 #### Output
 
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>I am node1
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>slot 5798 is owned by node2 at 127.0.0.1:7002
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>is it mine? false
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>I am node1
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>slot 5798 is owned by node2 at 127.0.0.1:7002
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>is it mine? false
 </code></pre></div>
 
 </p>
@@ -1731,58 +1789,67 @@ A layout lists every node and the slots it owns. The node finds itself by its po
 
 <p><a name="ParseLayoutAs"></a></p>
 <h3 id="func-parselayoutas">func ParseLayoutAs<a class="headerlink" href="#func-parselayoutas" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">ParseLayoutAs</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">myName</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">ParseLayoutAs</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">myName</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <p>ParseLayout parses a layout file. Each non-empty line is:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>&lt;name&gt; &lt;host:port&gt; &lt;slot or range&gt; [&lt;slot or range&gt; ...]
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>&lt;name&gt; &lt;host:port&gt; &lt;slot or range&gt; [&lt;slot or range&gt; ...]
 </code></pre></div>
 <p>Anything after '#' is a comment. Any mistake is an error, because a node with a wrong layout would silently send clients to the wrong place.</p>
 <p><a name="Layout.Owner"></a></p>
 <h3 id="func-layout-owner">func (*Layout) Owner<a class="headerlink" href="#func-layout-owner" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">Owner</span><span class="p">(</span><span class="nx">slot</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">Owner</span><span class="p">(</span><span class="nx">slot</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span>
 </code></pre></div>
 <p>Owner returns the node that owns slot, or nil if nobody does.</p>
 <p><a name="Message"></a></p>
 <h2 id="type-message">type Message<a class="headerlink" href="#type-message" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Message</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">    </span><span class="nx">Type</span><span class="w"> </span><span class="kt">string</span>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">    </span><span class="nx">ID</span><span class="w">   </span><span class="kt">string</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">    </span><span class="nx">Name</span><span class="w"> </span><span class="kt">string</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="nx">Addr</span><span class="w"> </span><span class="kt">string</span>
-<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="p">}</span>
+<p>Message is one message on the cluster bus.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Message</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">    </span><span class="nx">Type</span><span class="w">   </span><span class="kt">string</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span><span class="nx">ID</span><span class="w">     </span><span class="kt">string</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">    </span><span class="nx">Name</span><span class="w">   </span><span class="kt">string</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">   </span><span class="kt">string</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">    </span><span class="nx">Flags</span><span class="w">  </span><span class="nx">NodeFlags</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="w">    </span><span class="nx">Slots</span><span class="w">  </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="w">   </span><span class="c1">// the sender's own slots</span>
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="w">    </span><span class="nx">Gossip</span><span class="w"> </span><span class="p">[]</span><span class="nx">GossipEntry</span><span class="w"> </span><span class="c1">// other nodes the sender knows about</span>
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Node"></a></p>
 <h2 id="type-node">type Node<a class="headerlink" href="#type-node" title="Permanent link">&para;</a></h2>
 <p>Node is one member of the cluster, as described by one line of the cluster layout file.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Node</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">  </span><span class="kt">string</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="c1">// "host:port"</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">    </span><span class="nx">Port</span><span class="w">  </span><span class="kt">int</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">    </span><span class="nx">ID</span><span class="w">    </span><span class="kt">string</span><span class="w"> </span><span class="c1">// 40 hex chars, derived from Name so it's stable across restarts</span>
-<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">    </span><span class="nx">Slots</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span>
-<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Node</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">  </span><span class="kt">string</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="c1">// "host:port"</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">    </span><span class="nx">Port</span><span class="w">  </span><span class="kt">int</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">    </span><span class="nx">ID</span><span class="w">    </span><span class="kt">string</span><span class="w"> </span><span class="c1">// 40 hex chars, derived from Name so it's stable across restarts</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="w">    </span><span class="nx">Slots</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span>
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="p">}</span>
+</code></pre></div>
+<p><a name="NodeFlags"></a></p>
+<h2 id="type-nodeflags">type NodeFlags<a class="headerlink" href="#type-nodeflags" title="Permanent link">&para;</a></h2>
+<p>NodeFlags is a set of node state bits carried on the bus. None are defined yet; they come with the handshake and failure detection.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">NodeFlags</span><span class="w"> </span><span class="kt">uint16</span>
 </code></pre></div>
 <p><a name="Peer"></a></p>
 <h2 id="type-peer">type Peer<a class="headerlink" href="#type-peer" title="Permanent link">&para;</a></h2>
 <p>Peer is the live status of one other node. Only dispatchWorker touches it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Peer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">    </span><span class="nx">Node</span><span class="w">     </span><span class="o">*</span><span class="nx">Node</span><span class="w">     </span><span class="c1">// which node this is (from cluster.conf)</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">    </span><span class="nx">PingSent</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// PING sent and not answered yet (zero if none)</span>
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">    </span><span class="nx">PongRecv</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// last PONG received (zero if never)</span>
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
-<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Peer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">    </span><span class="nx">Node</span><span class="w">     </span><span class="o">*</span><span class="nx">Node</span><span class="w">     </span><span class="c1">// which node this is (from cluster.conf)</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">    </span><span class="nx">PingSent</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// PING sent and not answered yet (zero if none)</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">    </span><span class="nx">PongRecv</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// last PONG received (zero if never)</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Peer.Connected"></a></p>
 <h3 id="func-peer-connected">func (*Peer) Connected<a class="headerlink" href="#func-peer-connected" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">Connected</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">Connected</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>Connected reports whether we currently have a connection to the peer.</p>
 <p><a name="SlotRange"></a></p>
 <h2 id="type-slotrange">type SlotRange<a class="headerlink" href="#type-slotrange" title="Permanent link">&para;</a></h2>
 <p>SlotRange is an inclusive range of slots, e.g. 0-5460.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">SlotRange</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">    </span><span class="nx">Start</span><span class="p">,</span><span class="w"> </span><span class="nx">End</span><span class="w"> </span><span class="kt">int</span>
-<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">SlotRange</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">    </span><span class="nx">Start</span><span class="p">,</span><span class="w"> </span><span class="nx">End</span><span class="w"> </span><span class="kt">int</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="p">}</span>
 </code></pre></div>
 <p>Generated by <a href="https://github.com/princjef/gomarkdoc">gomarkdoc</a></p>
 
