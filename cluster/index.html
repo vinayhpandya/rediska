@@ -498,6 +498,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-cluster-bus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cluster bus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#transactions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1062,6 +1073,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-cluster-bus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cluster bus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#transactions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1150,8 +1172,9 @@ the right node.</p>
 <p class="admonition-title">Current scope</p>
 </div>
 <p>The cluster layout is <strong>fixed</strong>: every node reads it from a file at
-startup. Nodes don't talk to each other yet, slots can't move while
-running, and there are no replicas. See <a href="#limitations">Limitations</a>.</p>
+startup. Nodes check on each other over the <a href="#the-cluster-bus">cluster bus</a>,
+but they don't share the layout or detect failures yet, slots can't move
+while running, and there are no replicas. See <a href="#limitations">Limitations</a>.</p>
 <h2 id="slots">Slots<a class="headerlink" href="#slots" title="Permanent link">&para;</a></h2>
 <p>Every key belongs to one of <strong>16384 hash slots</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>slot = CRC16(key) mod 16384
@@ -1201,6 +1224,8 @@ and the slots it owns:</p>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7002</span><span class="w"> </span>--cluster-enabled<span class="w"> </span>--cluster-config-file<span class="w"> </span>cluster.conf
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7003</span><span class="w"> </span>--cluster-enabled<span class="w"> </span>--cluster-config-file<span class="w"> </span>cluster.conf
 </code></pre></div>
+<p>Each node also listens on its client port + 10000 (here 17001–17003) for the
+<a href="#the-cluster-bus">cluster bus</a>, so those ports must be free too.</p>
 <h3 id="the-cluster-script">The cluster script<a class="headerlink" href="#the-cluster-script" title="Permanent link">&para;</a></h3>
 <p><code>scripts/cluster.sh</code> does all of that for you:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>./scripts/cluster.sh<span class="w"> </span>start<span class="w">     </span><span class="c1"># build, write the layout, start the nodes</span>
@@ -1236,44 +1261,63 @@ Redis Cluster understand Rediska:</p>
 </code></pre></div>
 <p><code>redis-cli -c</code> follows <code>MOVED</code> redirects for you. In a pipeline, each
 command gets its own reply, in order.</p>
+<h2 id="the-cluster-bus">The cluster bus<a class="headerlink" href="#the-cluster-bus" title="Permanent link">&para;</a></h2>
+<p>Every node opens a second port for other nodes, at its client port + 10000
+(7001 → 17001). Clients never use it.</p>
+<p>Over the bus, each node:</p>
+<ul>
+<li>connects to every other node in <code>cluster.conf</code>, retrying every second if
+  one isn't up yet</li>
+<li>sends each connected node a <code>PING</code> once a second, and answers every <code>PING</code>
+  with a <code>PONG</code></li>
+<li>notices when a connection closes, shows that node as <code>disconnected</code>, and
+  reconnects by itself when it comes back</li>
+</ul>
+<p>Messages use RESP, the same format as client commands, so you can talk to
+the bus by hand:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span><span class="o">(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">'*4\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n'</span><span class="p">;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">1</span><span class="o">)</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>localhost<span class="w"> </span><span class="m">17001</span>
+</code></pre></div>
+<p>The reply is a <code>PONG</code> carrying node1's ID, name and address.</p>
+<p>Bus work runs on the same goroutine as client commands, so cluster state,
+like the data, needs no locks.</p>
 <h2 id="transactions">Transactions<a class="headerlink" href="#transactions" title="Permanent link">&para;</a></h2>
 <p>All keys in a <code>MULTI</code>/<code>EXEC</code> transaction must be in <strong>one slot</strong>, owned by
 the node you're connected to. Rediska checks this in two places, as Redis
 does:</p>
 <p><strong>While queuing</strong>, each command is checked on its own. If one fails, the
 transaction is marked broken and <code>EXEC</code> refuses to run anything:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="go">127.0.0.1:7001&gt; multi</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="go">OK</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="go">127.0.0.1:7001(TX)&gt; set age 30</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="go">QUEUED</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set name vinay</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">MOVED 5798 127.0.0.1:7002</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="go">127.0.0.1:7001(TX)&gt; exec</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">EXECABORT Transaction discarded because of previous errors.</span>
-</code></pre></div>
-<p><strong>At <code>EXEC</code></strong>, all the queued keys are checked together. This catches
-commands that are fine on their own but use different slots:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="go">127.0.0.1:7001&gt; multi</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="go">OK</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="go">127.0.0.1:7001(TX)&gt; set age 30</span>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="go">QUEUED</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set foo2 x</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="go">QUEUED</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set name vinay</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">MOVED 5798 127.0.0.1:7002</span>
 <a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="go">127.0.0.1:7001(TX)&gt; exec</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CROSSSLOT Keys in request don't hash to the same slot</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">EXECABORT Transaction discarded because of previous errors.</span>
+</code></pre></div>
+<p><strong>At <code>EXEC</code></strong>, all the queued keys are checked together. This catches
+commands that are fine on their own but use different slots:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="go">127.0.0.1:7001&gt; multi</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="go">OK</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="go">127.0.0.1:7001(TX)&gt; set age 30</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="go">QUEUED</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set foo2 x</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="go">QUEUED</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="go">127.0.0.1:7001(TX)&gt; exec</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CROSSSLOT Keys in request don't hash to the same slot</span>
 </code></pre></div>
 <p><code>age</code> (slot 741) and <code>foo2</code> (slot 1044) are both on node1, but in different
 slots, so the transaction is refused. Either way, a transaction never runs
 halfway. Use hash tags to keep a transaction's keys together:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="go">127.0.0.1:7002&gt; multi</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="go">OK</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="go">127.0.0.1:7002(TX)&gt; set {user1}.name vinay</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="go">QUEUED</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="go">127.0.0.1:7002(TX)&gt; incr {user1}.visits</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="go">QUEUED</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="go">127.0.0.1:7002(TX)&gt; exec</span>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="go">1) OK</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="go">2) (integer) 1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">127.0.0.1:7002&gt; multi</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="go">OK</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="go">127.0.0.1:7002(TX)&gt; set {user1}.name vinay</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="go">QUEUED</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="go">127.0.0.1:7002(TX)&gt; incr {user1}.visits</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="go">QUEUED</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="go">127.0.0.1:7002(TX)&gt; exec</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="go">1) OK</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="go">2) (integer) 1</span>
 </code></pre></div>
 <h2 id="cluster-commands">CLUSTER commands<a class="headerlink" href="#cluster-commands" title="Permanent link">&para;</a></h2>
 <table>
@@ -1325,22 +1369,26 @@ halfway. Use hash tags to keep a transaction's keys together:</p>
 <p><code>INFO cluster</code> reports <code>cluster_enabled:1</code> on a cluster node.</p>
 <p><code>COUNTKEYSINSLOT</code> and <code>GETKEYSINSLOT</code> answer about the node you ask, whoever
 owns the slot, and never redirect:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">3</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>getkeysinslot<span class="w"> </span><span class="m">8106</span><span class="w"> </span><span class="m">10</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="go">1) "{user1}.name"</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="go">2) "{user1}.email"</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="go">3) "{user1}.visits"</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">0</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">3</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>getkeysinslot<span class="w"> </span><span class="m">8106</span><span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="go">1) "{user1}.name"</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="go">2) "{user1}.email"</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="go">3) "{user1}.visits"</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">0</span>
 </code></pre></div>
 <p>To answer these quickly, each cluster node keeps a small index of which of
 its keys are in each slot, next to its data. It's updated whenever a key is
 created or removed (including by expiry and eviction), and it's switched off
 on a normal single node.</p>
 <p>Node IDs are derived from the node's name, so they stay the same across
-restarts. Fields that need nodes to talk to each other (ping times, link
-state) have fixed values for now.</p>
+restarts.</p>
+<p>In <code>CLUSTER NODES</code>, the ping-sent and pong-received columns come from the
+<a href="#the-cluster-bus">cluster bus</a>. They are Unix times in milliseconds (<code>0</code>
+means none pending, or never), and the link state is <code>connected</code> or
+<code>disconnected</code>. Run it twice: on a healthy cluster, the pong times move
+forward every second.</p>
 <h3 id="tools-that-work">Tools that work<a class="headerlink" href="#tools-that-work" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>redis-cli -c</code>: follows redirects.</li>
@@ -1356,15 +1404,14 @@ it loads its whole AOF back <strong>without</strong> the cluster check, so its d
 never dropped, even if the layout file changed while it was down.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Fixed layout</strong>: nodes don't talk to each other; to change the layout,
-  edit the file and restart the nodes.</li>
+<li><strong>Fixed layout, no gossip yet</strong>: every node learns the layout from
+  <code>cluster.conf</code> and connects to every node in it. There's no
+  <code>CLUSTER MEET</code>; to change the layout, edit the file and restart the nodes.</li>
+<li><strong>No failure detection yet</strong>: a stopped node shows as <code>disconnected</code>,
+  but nodes don't yet agree that it has failed, and routing doesn't change.</li>
 <li><strong>No slot migration</strong>: slots can't move between running nodes.</li>
 <li><strong>No replicas or failover</strong>: if a node goes down, its slots are
   unavailable until it comes back.</li>
-<li><strong>One machine</strong>: nodes find themselves by port, so all nodes need
-  different ports. Running nodes on separate machines (which typically all
-  use the same port) needs a <code>--cluster-node-name</code> flag, which isn't there
-  yet.</li>
 </ul>
 
 
