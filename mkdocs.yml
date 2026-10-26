@@ -65,6 +65,7 @@ nav:
       - Cluster mode: cluster.md
       - Design decisions: design-decisions.md
       - Testing: testing.md
+      - Releasing: releasing.md
       - Performance: performance.md
   - API reference:
       - cluster: api/cluster.md

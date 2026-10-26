@@ -1,0 +1,93 @@
+# GoReleaser builds Rediska's release binaries and publishes them.
+#
+# A release runs on GitHub Actions when you push a tag (see
+# .github/workflows/release.yml):
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Try it locally without publishing anything:
+#
+#   goreleaser check                         # is this file valid?
+#   goreleaser release --snapshot --clean    # build everything into dist/
+#
+# Docs: https://goreleaser.com
+version: 2
+
+project_name: rediska
+
+before:
+  hooks:
+    - go vet ./...
+
+builds:
+  - main: .
+    binary: rediska
+    env:
+      - CGO_ENABLED=0 # no C code, so fully static binaries that run anywhere
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath # no local file paths in the binary
+    ldflags:
+      # -s -w: smaller binary (no debug symbols). The -X flags fill in the
+      # version variables in main.go, so `rediska --version` reports them.
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # e.g. rediska_0.1.0_darwin_arm64.tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "(?i)^gofmt"
+      - "(?i)^format"
+
+release:
+  # Publish to this repo by name, not whatever the local git remote says
+  # (the repo used to be called learning-redis).
+  github:
+    owner: vinayhpandya
+    name: rediska
+  # Tags like v0.2.0-rc1 are marked as pre-releases on GitHub.
+  prerelease: auto
+
+# brew install vinayhpandya/tap/rediska
+homebrew_casks:
+  - name: rediska
+    binaries: [rediska]
+    homepage: https://vinayhpandya.github.io/rediska/
+    description: Redis-compatible in-memory key-value server written in Go
+    license: MIT
+    repository:
+      owner: vinayhpandya
+      name: homebrew-tap
+      # The workflow's own GITHUB_TOKEN can only write to this repo, so the
+      # tap needs a separate token (see the release workflow).
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "rediska {{ .Tag }}"
+    hooks:
+      post:
+        # The binary isn't signed by Apple, so macOS would refuse to run it.
+        # This removes the "downloaded from the internet" quarantine flag
+        # after install. Proper signing and notarization would replace it.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/rediska"]
+          end

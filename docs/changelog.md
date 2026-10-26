@@ -2,6 +2,24 @@
 
 How Rediska was built, one milestone at a time (newest first).
 
+## Milestone 16
+
+Releases with GoReleaser and Homebrew
+
+1. Pushing a `v*` tag runs `.github/workflows/release.yml`: it tests, then
+   GoReleaser builds macOS, Linux and Windows binaries (Intel and ARM) and
+   publishes a GitHub Release with checksums and a changelog
+2. Each release updates the cask in `vinayhpandya/homebrew-tap`, so
+   `brew install vinayhpandya/tap/rediska` works
+3. Added `rediska --version`, filled in at build time
+4. Added an MIT `LICENSE`, shipped in every archive
+5. New [Releasing](releasing.md) page; the install guide now covers
+   Homebrew, downloads and `go install`
+
+Try it:
+
+    goreleaser release --snapshot --clean    # builds everything into dist/, publishes nothing
+
 ## Milestone 15
 
 Cluster bus: nodes check on each other (Phase 4a)

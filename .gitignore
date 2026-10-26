@@ -8,3 +8,5 @@ rediska
 docs/api/
 site/
 .venv/
+# GoReleaser output (goreleaser release --snapshot)
+dist/

@@ -82,4 +82,5 @@ Every push to `main` and every pull request runs, on Linux and macOS:
 4. `go test -race ./...`.
 
 See `.github/workflows/ci.yaml`. A separate workflow builds and publishes
-this documentation site.
+this documentation site, and pushing a version tag runs the release
+workflow (see [Releasing](releasing.md)).
