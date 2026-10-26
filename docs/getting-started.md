@@ -17,8 +17,8 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
 !!! note
-    `@latest` installs the newest tagged release. To try the newest code on
-    the `main` branch instead, use `@main`.
+`@latest` installs the newest tagged release. To try the newest code on
+the `main` branch instead, use `@main`.
 
 ### From source
 
@@ -75,29 +75,30 @@ rediska --port 7379 --maxmemory 100 --maxmemory-policy allkeys-lru
 
 `--maxmemory` is in megabytes. When the limit is reached:
 
-| Policy | What happens |
-|---|---|
-| `noeviction` (default) | writes are refused with an `OOM` error; reads and `DEL` still work |
-| `allkeys-lru` | the least recently used keys are evicted (approximate, by sampling) |
-| `allkeys-lfu` | the least frequently used keys are evicted |
-| `volatile-lfu` | currently the same as `allkeys-lfu` (Redis would only evict keys that have an expiry) |
+| Policy                 | What happens                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `noeviction` (default) | writes are refused with an `OOM` error; reads and `DEL` still work                    |
+| `allkeys-lru`          | the least recently used keys are evicted (approximate, by sampling)                   |
+| `allkeys-lfu`          | the least frequently used keys are evicted                                            |
+| `volatile-lfu`         | currently the same as `allkeys-lfu` (Redis would only evict keys that have an expiry) |
 
 ## All flags
 
-| Flag | Default | Meaning |
-|---|---|---|
-| `--host` | `0.0.0.0` | address to listen on (`0.0.0.0` = every network interface) |
-| `--port` | `7379` | TCP port |
-| `--appendOnly` | off | turn on the append-only file |
-| `--appendOnlyFile` | | path of the append-only file |
-| `--maxmemory` | `0` | memory limit in MB (`0` = no limit) |
-| `--maxmemory-policy` | `noeviction` | what to do at the limit (see above) |
-| `--maxmemory-samples` | `5` | keys sampled per eviction round |
-| `--lfu-log-factor` | `10` | how slowly LFU counters grow (higher = slower) |
-| `--lfu-decay-time` | `1` | idle minutes per LFU counter decay step |
-| `--cluster-enabled` | off | run as a cluster node |
-| `--cluster-config-file` | | cluster layout file (required with `--cluster-enabled`) |
-| `--pprof-addr` | off | serve Go's profiler, e.g. `localhost:6060` |
+| Flag                    | Default      | Meaning                                                            |
+| ----------------------- | ------------ | ------------------------------------------------------------------ |
+| `--host`                | `0.0.0.0`    | address to listen on (`0.0.0.0` = every network interface)         |
+| `--port`                | `7379`       | TCP port                                                           |
+| `--appendOnly`          | off          | turn on the append-only file                                       |
+| `--appendOnlyFile`      |              | path of the append-only file                                       |
+| `--maxmemory`           | `0`          | memory limit in MB (`0` = no limit)                                |
+| `--maxmemory-policy`    | `noeviction` | what to do at the limit (see above)                                |
+| `--maxmemory-samples`   | `5`          | keys sampled per eviction round                                    |
+| `--lfu-log-factor`      | `10`         | how slowly LFU counters grow (higher = slower)                     |
+| `--lfu-decay-time`      | `1`          | idle minutes per LFU counter decay step                            |
+| `--cluster-enabled`     | off          | run as a cluster node                                              |
+| `--cluster-node-name`   |              | this node's name in the layout file (default: find it by `--port`) |
+| `--cluster-config-file` |              | cluster layout file (required with `--cluster-enabled`)            |
+| `--pprof-addr`          | off          | serve Go's profiler, e.g. `localhost:6060`                         |
 
 ## Run a cluster
 

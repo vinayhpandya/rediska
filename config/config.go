@@ -37,4 +37,7 @@ var (
 	// the slots it owns (--cluster-config-file). Required with
 	// ClusterEnabled.
 	ClusterConfigFile string
+	// ClusterNodeName is this node's name in the layout file
+	// (--cluster-node-name). If empty, the node finds itself by its port.
+	ClusterNodeName string
 )

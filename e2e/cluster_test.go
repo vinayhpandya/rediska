@@ -113,22 +113,28 @@ func startCluster(t *testing.T) *testCluster {
 	return c
 }
 
-// freePorts asks the OS for n unused ports, so the test never clashes with
-// a cluster you already have running on 7001-7003.
+// freePorts finds n unused client ports whose cluster bus ports (client
+// port + 10000) are also free, so the test never clashes with a cluster you
+// already have running on 7001-7003.
 func freePorts(t *testing.T, n int) []int {
 	t.Helper()
 	var ports []int
-	var ls []net.Listener
-	for range n {
+	for len(ports) < n {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
 		}
-		ls = append(ls, l)
-		ports = append(ports, l.Addr().(*net.TCPAddr).Port)
-	}
-	for _, l := range ls {
+		p := l.Addr().(*net.TCPAddr).Port
 		l.Close()
+		if p+10000 > 65535 {
+			continue
+		}
+		bus, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p+10000))
+		if err != nil {
+			continue // bus port taken: try another
+		}
+		bus.Close()
+		ports = append(ports, p)
 	}
 	return ports
 }
@@ -351,6 +357,31 @@ func TestCluster(t *testing.T) {
 		}
 		n3.do("DEL", "{slotcheck}.a")
 		expect(t, "count after DEL", n3.do("CLUSTER", "COUNTKEYSINSLOT", slot), "2")
+	})
+
+	t.Run("nodes connect to each other on the cluster bus", func(t *testing.T) {
+		// Every node should see every other one as connected, with a real
+		// PONG time, within a few seconds of starting.
+		deadline := time.Now().Add(5 * time.Second)
+		for node := range c.addrs {
+			for {
+				lines := strings.Split(strings.TrimSpace(c.dial(t, node).do("CLUSTER", "NODES")), "\n")
+				ok := len(lines) == 3
+				for _, line := range lines {
+					f := strings.Fields(line)
+					if len(f) < 8 || f[5] == "0" || f[7] != "connected" { // f[5] = pong-recv
+						ok = false
+					}
+				}
+				if ok {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("node%d: not every node connected yet:\n%s", node+1, strings.Join(lines, "\n"))
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
 	})
 
 	t.Run("CLUSTER INFO and MYID", func(t *testing.T) {

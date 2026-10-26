@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/config"
@@ -123,8 +124,9 @@ func clusterNodes(l *cluster.Layout) string {
 		if n == l.Self {
 			flags = "myself,master"
 		}
-		fmt.Fprintf(&b, "%s %s:%d@%d %s - 0 0 %d connected",
-			n.ID, host, port, port+10000, flags, i+1)
+		pingSent, pongRecv, link := nodeLinkInfo(l, n)
+		fmt.Fprintf(&b, "%s %s:%d@%d %s - %d %d %d %s",
+		n.ID, host, port, cluster.BusPort(port), flags, pingSent, pongRecv, i+1, link)
 		for _, r := range n.Slots {
 			if r.Start == r.End {
 				fmt.Fprintf(&b, " %d", r.Start)
@@ -178,4 +180,34 @@ func splitAddr(addr string) (string, int) {
 	i := strings.LastIndexByte(addr, ':')
 	port, _ := strconv.Atoi(addr[i+1:])
 	return addr[:i], port
+}
+
+// nodeLinkInfo returns what CLUSTER NODES shows about our connection to n:
+// the unanswered PING time and last PONG time (Unix ms, 0 for never), and
+// whether the link is up. With no running bus (tests) it reports 0, 0, connected.
+func nodeLinkInfo(l *cluster.Layout, n *cluster.Node) (pingSent, pongRecv int64, link string) {
+	bus := cluster.CurrentBus
+	if bus == nil {
+		return 0, 0, "connected"
+	}
+	if n == l.Self {
+		return 0, time.Now().UnixMilli(), "connected" // like Redis: myself is always up
+	}
+	p := bus.Peer(n.ID)
+	if p == nil {
+		return 0, 0, "disconnected"
+	}
+	link = "disconnected"
+	if p.Connected() {
+		link = "connected"
+	}
+	return unixMilli(p.PingSent), unixMilli(p.PongRecv), link
+}
+
+// unixMilli turns a time into Unix milliseconds, with 0 for "never".
+func unixMilli(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
 }
