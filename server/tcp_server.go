@@ -34,7 +34,7 @@ type CommandRequest struct {
 	batch    []*commands.Command // MULTI/EXEC: dispatched as one array-wrapped reply
 	pipeline []*commands.Command // pipelined commands: dispatched as concatenated individual replies
 	replych  chan []byte
-	fn       func()
+	busEvent *cluster.Event
 }
 
 // replyChPool reuses reply channels across commands instead of allocating a
@@ -212,8 +212,8 @@ func startActiveExpiry(ctx context.Context, commandCh chan<- CommandRequest, wg 
 
 func dispatchWorker(commandCh <-chan CommandRequest) {
 	for req := range commandCh {
-		if req.fn != nil {
-			req.fn() // cluster bus job: tick, handle, linkUp, ...
+		if req.busEvent != nil {
+			cluster.CurrentBus.Handle(*req.busEvent)
 			continue
 		}
 		var reply []byte

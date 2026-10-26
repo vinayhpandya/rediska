@@ -18,7 +18,7 @@ import (
 //
 // Threading: goroutines that wait on the network or timers never touch the
 // bus's state. Anything that reads or changes peers runs on dispatchWorker,
-// handed over with b.run(...). That keeps Rediska's "one goroutine owns the
+// handed over as an Event (see events.go). That keeps Rediska's "one goroutine owns the
 // state, no locks" design.
 
 const (
@@ -65,7 +65,7 @@ type Bus struct {
 	listener net.Listener
 
 	ctx     context.Context
-	run     func(func())   // hands a function to dispatchWorker
+	send    func(Event)    // hands an event to dispatchWorker
 	wg      sync.WaitGroup // counts every bus goroutine, for Wait
 	dialReq chan *Node     // tick -> dialLoop: "please connect to this node"
 }
@@ -107,16 +107,16 @@ func (b *Bus) Listen(host string) error {
 }
 
 // Start starts the bus's goroutines; they run until ctx is cancelled.
-// run must hand a function to dispatchWorker, and must not block forever
-// once ctx is cancelled.
+// send must hand an event to dispatchWorker (which calls Handle), and must
+// not block forever once ctx is cancelled.
 //
 // Each goroutine waits for a different thing:
 //   - acceptLoop: another node connecting to us
 //   - cronLoop:   the 100 ms timer
 //   - dialLoop:   tick asking us to connect to a node
 //   - the last one: shutdown, to close the listener (which wakes acceptLoop)
-func (b *Bus) Start(ctx context.Context, run func(func())) {
-	b.ctx, b.run = ctx, run
+func (b *Bus) Start(ctx context.Context, send func(Event)) {
+	b.ctx, b.send = ctx, send
 	b.wg.Add(4)
 	go b.acceptLoop()
 	go b.cronLoop()
@@ -153,7 +153,7 @@ func (b *Bus) self(typ string) Message {
 }
 
 // ======================================================= network goroutines
-// These only wait for things and hand them to dispatchWorker with b.run.
+// These only wait for things and send them to dispatchWorker with b.send.
 // They never touch peers. New goroutines are only started from goroutines
 // already counted in b.wg, so Wait can't miss one at shutdown.
 
@@ -175,7 +175,7 @@ func (b *Bus) acceptLoop() {
 	}
 }
 
-// cronLoop asks dispatchWorker to run tick every 100 ms.
+// cronLoop sends dispatchWorker a tick event every 100 ms.
 func (b *Bus) cronLoop() {
 	defer b.wg.Done()
 	t := time.NewTicker(cronInterval)
@@ -185,7 +185,7 @@ func (b *Bus) cronLoop() {
 		case <-b.ctx.Done():
 			return
 		case <-t.C:
-			b.run(b.tick)
+			b.send(Event{Kind: EvTick})
 		}
 	}
 }
@@ -213,13 +213,13 @@ func (b *Bus) dial(id, addr string) {
 	d := net.Dialer{Timeout: dialTimeout}
 	conn, err := d.DialContext(b.ctx, "tcp", addr)
 	if err != nil {
-		b.run(func() { b.dialFailed(id) })
+		b.send(Event{Kind: EvDialFailed, ID: id})
 		return
 	}
 	l := b.startLink(conn)
 	b.wg.Add(1)
 	go b.readLoop(conn, l, id)
-	b.run(func() { b.linkUp(id, l) })
+	b.send(Event{Kind: EvLinkUp, ID: id, Link: l})
 }
 
 // readLoop reads messages from one connection and hands each to
@@ -239,18 +239,19 @@ func (b *Bus) readLoop(conn net.Conn, l *link, peerID string) {
 			log.Printf("%v (from %s)", err, conn.RemoteAddr())
 			break
 		}
-		b.run(func() { b.handle(m, l) })
+		b.send(Event{Kind: EvMessage, Msg: m, Link: l})
 	}
 	conn.Close()
 	l.close()
 	if peerID != "" {
-		b.run(func() { b.linkDown(peerID, l) })
+		b.send(Event{Kind: EvLinkDown, ID: peerID, Link: l})
 	}
 }
 
 // ========================================================= dispatchWorker
-// Everything below runs on dispatchWorker, one at a time, so these
-// functions can read and change peers freely. They must never block.
+// Everything below is called from Handle (events.go), on dispatchWorker,
+// one at a time, so these functions can read and change peers freely.
+// They must never block.
 
 // tick runs every 100 ms: ask to connect to any peer we have no connection
 // to (at most once a second), and PING each connected peer once a second.
