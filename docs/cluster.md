@@ -6,8 +6,9 @@ the right node.
 
 !!! info "Current scope"
 The cluster layout is **fixed**: every node reads it from a file at
-startup. Nodes don't talk to each other yet, slots can't move while
-running, and there are no replicas. See [Limitations](#limitations).
+startup. Nodes check on each other over the [cluster bus](#the-cluster-bus),
+but they don't share the layout or detect failures yet, slots can't move
+while running, and there are no replicas. See [Limitations](#limitations).
 
 ## Slots
 
@@ -80,6 +81,9 @@ rediska --port 7002 --cluster-enabled --cluster-config-file cluster.conf
 rediska --port 7003 --cluster-enabled --cluster-config-file cluster.conf
 ```
 
+Each node also listens on its client port + 10000 (here 17001–17003) for the
+[cluster bus](#the-cluster-bus), so those ports must be free too.
+
 ### The cluster script
 
 `scripts/cluster.sh` does all of that for you:
@@ -128,6 +132,32 @@ $ redis-cli -p 7001 del age name
 
 `redis-cli -c` follows `MOVED` redirects for you. In a pipeline, each
 command gets its own reply, in order.
+
+## The cluster bus
+
+Every node opens a second port for other nodes, at its client port + 10000
+(7001 → 17001). Clients never use it.
+
+Over the bus, each node:
+
+- connects to every other node in `cluster.conf`, retrying every second if
+  one isn't up yet
+- sends each connected node a `PING` once a second, and answers every `PING`
+  with a `PONG`
+- notices when a connection closes, shows that node as `disconnected`, and
+  reconnects by itself when it comes back
+
+Messages use RESP, the same format as client commands, so you can talk to
+the bus by hand:
+
+```console
+$ (printf '*4\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n'; sleep 1) | nc localhost 17001
+```
+
+The reply is a `PONG` carrying node1's ID, name and address.
+
+Bus work runs on the same goroutine as client commands, so cluster state,
+like the data, needs no locks.
 
 ## Transactions
 
@@ -213,8 +243,13 @@ created or removed (including by expiry and eviction), and it's switched off
 on a normal single node.
 
 Node IDs are derived from the node's name, so they stay the same across
-restarts. Fields that need nodes to talk to each other (ping times, link
-state) have fixed values for now.
+restarts.
+
+In `CLUSTER NODES`, the ping-sent and pong-received columns come from the
+[cluster bus](#the-cluster-bus). They are Unix times in milliseconds (`0`
+means none pending, or never), and the link state is `connected` or
+`disconnected`. Run it twice: on a healthy cluster, the pong times move
+forward every second.
 
 ### Tools that work
 
@@ -234,12 +269,11 @@ never dropped, even if the layout file changed while it was down.
 
 ## Limitations
 
-- **Fixed layout**: nodes don't talk to each other; to change the layout,
-  edit the file and restart the nodes.
+- **Fixed layout, no gossip yet**: every node learns the layout from
+  `cluster.conf` and connects to every node in it. There's no
+  `CLUSTER MEET`; to change the layout, edit the file and restart the nodes.
+- **No failure detection yet**: a stopped node shows as `disconnected`,
+  but nodes don't yet agree that it has failed, and routing doesn't change.
 - **No slot migration**: slots can't move between running nodes.
 - **No replicas or failover**: if a node goes down, its slots are
   unavailable until it comes back.
-- **One machine**: nodes find themselves by port, so all nodes need
-  different ports. Running nodes on separate machines (which typically all
-  use the same port) needs a `--cluster-node-name` flag, which isn't there
-  yet.

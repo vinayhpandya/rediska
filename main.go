@@ -52,6 +52,7 @@ func setUpFlags() {
 	// ADDED: opt-in flag, off by default (empty string = pprof never starts)
 	flag.StringVar(&config.ClusterConfigFile, "cluster-config-file", "", "Cluster layout file (needed with --cluster-enabled)")
 	flag.StringVar(&pprofAddr, "pprof-addr", "", "If set, expose net/http/pprof on this address (e.g. localhost:6060). Disabled by default.")
+	flag.StringVar(&config.ClusterNodeName, "cluster-node-name", "", "This node's name in the cluster layout file (default: find it by --port)")
 	flag.Parse()
 }
 
@@ -61,7 +62,7 @@ func main() {
 		if config.ClusterConfigFile == "" {
 			log.Fatal("--cluster-enabled needs --cluster-config-file")
 		}
-		layout, err := cluster.LoadLayout(config.ClusterConfigFile, config.Port)
+		layout, err := cluster.LoadLayout(config.ClusterConfigFile, config.Port, config.ClusterNodeName)
 		if err != nil {
 			log.Fatal(err)
 		}

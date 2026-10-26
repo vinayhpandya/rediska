@@ -47,13 +47,17 @@ func (l *Layout) Owner(slot int) *Node {
 
 // LoadLayout reads the cluster layout file at path. myPort is this node's
 // port, used to find which line of the file describes this node.
-func LoadLayout(path string, myPort int) (*Layout, error) {
+func LoadLayout(path string, myPort int, myName string) (*Layout, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("cluster config: %w", err)
 	}
 	defer f.Close()
-	return ParseLayout(f, myPort)
+	return ParseLayoutAs(f, myPort, myName)
+}
+
+func ParseLayout(r io.Reader, myPort int) (*Layout, error) {
+	return ParseLayoutAs(r, myPort, "")
 }
 
 // ParseLayout parses a layout file. Each non-empty line is:
@@ -62,7 +66,7 @@ func LoadLayout(path string, myPort int) (*Layout, error) {
 //
 // Anything after '#' is a comment. Any mistake is an error, because a node
 // with a wrong layout would silently send clients to the wrong place.
-func ParseLayout(r io.Reader, myPort int) (*Layout, error) {
+func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error) {
 	l := &Layout{}
 	names := map[string]bool{}
 	addrs := map[string]bool{}
@@ -117,9 +121,14 @@ func ParseLayout(r io.Reader, myPort int) (*Layout, error) {
 
 		names[name], addrs[addr] = true, true
 		l.Nodes = append(l.Nodes, n)
-		if port == myPort {
+		switch {
+		case myName != "":
+			if name == myName {
+				l.Self = n // names are unique, checked above
+			}
+		case port == myPort:
 			if l.Self != nil {
-				return nil, fmt.Errorf("cluster config: port %d appears twice, can't tell which node is me", port)
+				return nil, fmt.Errorf("cluster config: port %d appears twice, can't tell which node is me (use --cluster-node-name)", port)
 			}
 			l.Self = n
 		}
@@ -131,6 +140,9 @@ func ParseLayout(r io.Reader, myPort int) (*Layout, error) {
 		return nil, fmt.Errorf("cluster config: no nodes defined")
 	}
 	if l.Self == nil {
+		if myName != "" {
+			return nil, fmt.Errorf("cluster config: no node is named %q, so I can't find myself", myName)
+		}
 		return nil, fmt.Errorf("cluster config: no node uses port %d, so I can't find myself", myPort)
 	}
 	return l, nil

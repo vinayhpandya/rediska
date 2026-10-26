@@ -13,14 +13,16 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/vinayhpandya/rediska/commands"
-	"github.com/vinayhpandya/rediska/core"
 	"io"
 	"log"
 	"net"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/vinayhpandya/rediska/cluster"
+	"github.com/vinayhpandya/rediska/commands"
+	"github.com/vinayhpandya/rediska/core"
 )
 
 // CommandRequest is one unit of work sent from a connection to the
@@ -32,6 +34,7 @@ type CommandRequest struct {
 	batch    []*commands.Command // MULTI/EXEC: dispatched as one array-wrapped reply
 	pipeline []*commands.Command // pipelined commands: dispatched as concatenated individual replies
 	replych  chan []byte
+	fn func()
 }
 
 // replyChPool reuses reply channels across commands instead of allocating a
@@ -86,6 +89,17 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 		commands.SetAOF(aof)
 	}
 	listener, err := net.Listen("tcp", addr)
+	var bus *cluster.Bus
+	if cluster.Current != nil { // cluster mode is on
+	bus = cluster.NewBus(cluster.Current)
+	if err := bus.Listen(host); err != nil {
+		listener.Close()
+		if aof != nil {
+			aof.Close()
+		}
+		return err
+	}
+}
 	if err != nil {
 		if aof != nil {
 			aof.Close()
@@ -109,6 +123,21 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 	var producers sync.WaitGroup
 	producers.Add(1)
 	go startActiveExpiry(ctx, commandCh, &producers)
+	if bus != nil {
+		cluster.CurrentBus = bus // so CLUSTER NODES can read it
+		bus.Start(ctx, func(f func()) {
+			select {
+			case commandCh <- CommandRequest{fn: f}: // hand f to dispatchWorker
+			case <-ctx.Done(): // shutting down: drop it
+			}
+		})
+		producers.Add(1)
+		go func() {
+			bus.Wait()
+			producers.Done()
+		}()
+		fmt.Printf("cluster bus is listening on port %d\n", cluster.BusPort(port))
+	}
 	fmt.Printf("rediska is listening on %s \n", addr)
 	for {
 		conn, err := listener.Accept()
@@ -183,6 +212,10 @@ func startActiveExpiry(ctx context.Context, commandCh chan<- CommandRequest, wg 
 
 func dispatchWorker(commandCh <-chan CommandRequest) {
 	for req := range commandCh {
+		if req.fn != nil {
+			req.fn() // cluster bus job: tick, handle, linkUp, ...
+			continue
+		}
 		var reply []byte
 		switch {
 		case req.batch != nil:
