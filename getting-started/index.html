@@ -415,6 +415,50 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#homebrew-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Homebrew (macOS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download-a-binary-macos-linux-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Download a binary (macOS, Linux, Windows)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With Go
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-it-worked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check it worked
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -576,6 +620,34 @@
     
   
     Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
   
 
     
@@ -973,6 +1045,50 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#homebrew-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Homebrew (macOS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download-a-binary-macos-linux-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Download a binary (macOS, Linux, Windows)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With Go
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-it-worked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check it worked
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#from-source" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1076,52 +1192,71 @@
 
 <h1 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h1>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<h3 id="homebrew-macos">Homebrew (macOS)<a class="headerlink" href="#homebrew-macos" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>brew<span class="w"> </span>install<span class="w"> </span>vinayhpandya/tap/rediska
+</code></pre></div>
+<p>This downloads a ready-built binary from the latest
+<a href="https://github.com/vinayhpandya/rediska/releases">release</a>, so you don't need
+Go. If Homebrew complains it doesn't understand the cask, run <code>brew update</code>
+first. Upgrade later with <code>brew upgrade rediska</code>.</p>
+<h3 id="download-a-binary-macos-linux-windows">Download a binary (macOS, Linux, Windows)<a class="headerlink" href="#download-a-binary-macos-linux-windows" title="Permanent link">&para;</a></h3>
+<p>Every <a href="https://github.com/vinayhpandya/rediska/releases">release</a> has a
+<code>.tar.gz</code> (<code>.zip</code> on Windows) for Intel and ARM machines, plus a
+<code>checksums.txt</code>. Unpack it and put <code>rediska</code> somewhere on your <code>PATH</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>rediska_0.1.0_linux_amd64.tar.gz
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>sudo<span class="w"> </span>mv<span class="w"> </span>rediska<span class="w"> </span>/usr/local/bin/
+</code></pre></div>
+<h3 id="with-go">With Go<a class="headerlink" href="#with-go" title="Permanent link">&para;</a></h3>
 <p>You need <a href="https://go.dev/dl/">Go</a> 1.25 or newer.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/vinayhpandya/rediska@latest
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/vinayhpandya/rediska@latest
 </code></pre></div>
 <p>This builds the <code>rediska</code> binary into <code>$(go env GOPATH)/bin</code>, usually
 <code>~/go/bin</code>. If your shell can't find <code>rediska</code> afterwards, add that folder to
 your <code>PATH</code>, for example in <code>~/.zshrc</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$PATH</span><span class="s2">:</span><span class="k">$(</span>go<span class="w"> </span>env<span class="w"> </span>GOPATH<span class="k">)</span><span class="s2">/bin"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$PATH</span><span class="s2">:</span><span class="k">$(</span>go<span class="w"> </span>env<span class="w"> </span>GOPATH<span class="k">)</span><span class="s2">/bin"</span>
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-</div>
 <p><code>@latest</code> installs the newest tagged release. To try the newest code on
 the <code>main</code> branch instead, use <code>@main</code>.</p>
+</div>
+<h3 id="check-it-worked">Check it worked<a class="headerlink" href="#check-it-worked" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="gp">$ </span>rediska<span class="w"> </span>--version
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="go">rediska 0.1.0 (commit 1a2b3c4, built 2026-10-26T03:00:00Z)</span>
+</code></pre></div>
 <h3 id="from-source">From source<a class="headerlink" href="#from-source" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/vinayhpandya/rediska
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">cd</span><span class="w"> </span>rediska
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>rediska<span class="w"> </span>.
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>./rediska
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/vinayhpandya/rediska
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">cd</span><span class="w"> </span>rediska
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>rediska<span class="w"> </span>.
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>./rediska
 </code></pre></div>
 <p>You'll also want <code>redis-cli</code> to talk to it. On macOS: <code>brew install redis</code>.</p>
 <h2 id="run-a-single-server">Run a single server<a class="headerlink" href="#run-a-single-server" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7379</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7379</span>
 </code></pre></div>
 <p>In another terminal:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>ping
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="go">PONG</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay<span class="w"> </span>EX<span class="w"> </span><span class="m">60</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="go">OK</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>ttl<span class="w"> </span>name
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">60</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>incr<span class="w"> </span>visits
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">1</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>object<span class="w"> </span>encoding<span class="w"> </span>visits
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="go">"int"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>ping
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="go">PONG</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay<span class="w"> </span>EX<span class="w"> </span><span class="m">60</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="go">OK</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>ttl<span class="w"> </span>name
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">60</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>incr<span class="w"> </span>visits
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">1</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7379</span><span class="w"> </span>object<span class="w"> </span>encoding<span class="w"> </span>visits
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="go">"int"</span>
 </code></pre></div>
 <p>Stop the server with <span class="keys"><kbd class="key-control">Ctrl</kbd><span>+</span><kbd class="key-c">C</kbd></span>. It shuts down cleanly: it finishes the
 commands already in flight and flushes the AOF to disk first.</p>
 <h2 id="keep-data-across-restarts">Keep data across restarts<a class="headerlink" href="#keep-data-across-restarts" title="Permanent link">&para;</a></h2>
 <p>By default, data lives only in memory. To keep it, turn on the append-only
 file (AOF):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7379</span><span class="w"> </span>--appendOnly<span class="w"> </span>--appendOnlyFile<span class="w"> </span>data.aof
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7379</span><span class="w"> </span>--appendOnly<span class="w"> </span>--appendOnlyFile<span class="w"> </span>data.aof
 </code></pre></div>
 <p>Every successful write command is appended to <code>data.aof</code>, and the file is
 replayed when the server starts.</p>
 <h2 id="limit-memory">Limit memory<a class="headerlink" href="#limit-memory" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7379</span><span class="w"> </span>--maxmemory<span class="w"> </span><span class="m">100</span><span class="w"> </span>--maxmemory-policy<span class="w"> </span>allkeys-lru
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>rediska<span class="w"> </span>--port<span class="w"> </span><span class="m">7379</span><span class="w"> </span>--maxmemory<span class="w"> </span><span class="m">100</span><span class="w"> </span>--maxmemory-policy<span class="w"> </span>allkeys-lru
 </code></pre></div>
 <p><code>--maxmemory</code> is in megabytes. When the limit is reached:</p>
 <table>
@@ -1225,14 +1360,19 @@ replayed when the server starts.</p>
 <td>off</td>
 <td>serve Go's profiler, e.g. <code>localhost:6060</code></td>
 </tr>
+<tr>
+<td><code>--version</code></td>
+<td></td>
+<td>print the version and exit</td>
+</tr>
 </tbody>
 </table>
 <h2 id="run-a-cluster">Run a cluster<a class="headerlink" href="#run-a-cluster" title="Permanent link">&para;</a></h2>
 <p>The repository includes a script that starts a 3-node cluster on your
 machine:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./scripts/cluster.sh<span class="w"> </span>start
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>redis-cli<span class="w"> </span>-c<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay<span class="w">   </span><span class="c1"># -c follows MOVED redirects</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>./scripts/cluster.sh<span class="w"> </span>stop
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>./scripts/cluster.sh<span class="w"> </span>start
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>redis-cli<span class="w"> </span>-c<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay<span class="w">   </span><span class="c1"># -c follows MOVED redirects</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>./scripts/cluster.sh<span class="w"> </span>stop
 </code></pre></div>
 <p>See <a href="../cluster/">Cluster mode</a> for how it works.</p>
 <h2 id="supported-commands">Supported commands<a class="headerlink" href="#supported-commands" title="Permanent link">&para;</a></h2>
