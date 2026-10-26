@@ -829,6 +829,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#milestone-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#milestone-14" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1045,6 +1056,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#milestone-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#milestone-14" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1248,6 +1270,36 @@
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <p>How Rediska was built, one milestone at a time (newest first).</p>
+<h2 id="milestone-15">Milestone 15<a class="headerlink" href="#milestone-15" title="Permanent link">&para;</a></h2>
+<p>Cluster bus: nodes check on each other (Phase 4a)</p>
+<ol>
+<li>Every node listens on a second port, its client port + 10000, for other
+   nodes only. Messages are RESP arrays, so <code>nc</code> can talk to it</li>
+<li>Each node connects to every other node in the layout, retries every
+   second while one is down, and reconnects by itself when it comes back</li>
+<li>Nodes send each other <code>PING</code> once a second and answer with <code>PONG</code></li>
+<li><code>CLUSTER NODES</code> shows real ping-sent and pong-received times, and
+   <code>connected</code> / <code>disconnected</code></li>
+<li>The bus's goroutines only wait and pass events on (<code>EvTick</code>, <code>EvLinkUp</code>,
+   <code>EvMessage</code>, ...). The dispatch worker handles them, so cluster state
+   needs no locks, like the data</li>
+<li>The worker never waits on the network: messages go through a
+   per-connection outbox and writer goroutine, and dials through <code>dialLoop</code></li>
+<li><code>cluster/bus_test.go</code> runs three buses in one process under <code>-race</code></li>
+</ol>
+<p>Try it:</p>
+<div class="highlight"><pre><span></span><code>./scripts/cluster.sh start
+redis-cli -p 7001 cluster nodes        # pong times move every second
+lsof -ti :7002 | xargs kill            # node2 shows disconnected
+./scripts/cluster.sh stop
+</code></pre></div>
+<p>TODO</p>
+<ol>
+<li>No gossip or <code>CLUSTER MEET</code> yet: every node reads the full layout (Phase 4b)</li>
+<li>No failure detection: a stopped node shows <code>disconnected</code>, but nodes
+   don't agree that it has failed (Phase 4d)</li>
+<li>Finding itself by port still only works on one machine</li>
+</ol>
 <h2 id="milestone-14">Milestone 14<a class="headerlink" href="#milestone-14" title="Permanent link">&para;</a></h2>
 <p>Fixed-layout cluster with redirects (Phase 2)</p>
 <ol>
