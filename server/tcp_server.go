@@ -125,10 +125,10 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 	go startActiveExpiry(ctx, commandCh, &producers)
 	if bus != nil {
 		cluster.CurrentBus = bus // so CLUSTER NODES can read it
-		bus.Start(ctx, func(f func()) {
+		bus.Start(ctx, func(e cluster.Event) {
 			select {
-			case commandCh <- CommandRequest{fn: f}: // hand f to dispatchWorker
-			case <-ctx.Done(): // shutting down: drop it
+			case commandCh <- CommandRequest{busEvent: &e}: // hand the event to dispatchWorker
+			case <-ctx.Done(): // shutting down; drop it
 			}
 		})
 		producers.Add(1)
