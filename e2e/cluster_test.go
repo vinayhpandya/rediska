@@ -110,6 +110,20 @@ func startCluster(t *testing.T) *testCluster {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
+
+	// 5. Wait until every node knows who owns every slot. Each node learns
+	// the others' slots from the others, over the cluster bus, so this
+	// takes a moment after startup.
+	for i := range c.addrs {
+		cl := c.dial(t, i)
+		deadline := time.Now().Add(5 * time.Second)
+		for !strings.Contains(cl.do("CLUSTER", "INFO"), "cluster_state:ok") {
+			if time.Now().After(deadline) {
+				t.Fatalf("node%d never learned the whole slot map:\n%s", i+1, cl.do("CLUSTER", "NODES"))
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 	return c
 }
 

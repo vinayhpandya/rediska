@@ -8,15 +8,18 @@ import (
 
 // A bus message is a RESP array of 7 items:
 //
-//	1  type      bulk string   PING or PONG
+//	1  type      bulk string   PING, PONG or MEET
 //	2  id        bulk string   sender's node ID
 //	3  name      bulk string   sender's name
 //	4  addr      bulk string   sender's client address, "host:port"
-//	5  flags     integer       sender's flags (none are defined yet: 0)
+//	5  flags     integer       sender's flags (see NodeFlags)
 //	6  slots     array         sender's OWN slots, as integers:
 //	                           start1 end1 start2 end2 ...
 //	7  gossip    array         a few other nodes the sender knows, each an
 //	                           array of 6: id name addr flags ping-sent pong-recv
+//
+// MEET is a PING that also says "add me if you don't know me": it's the
+// only message that makes a node take on a stranger (see gossip.go).
 //
 // Items 1-6 are the header: what the sender says about itself. A node only
 // ever announces its own slots; gossip entries carry who exists, not who
@@ -27,9 +30,14 @@ import (
 //
 //	*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n
 
-// NodeFlags is a set of node state bits carried on the bus. None are
-// defined yet; they come with the handshake and failure detection.
+// NodeFlags is a set of node state bits carried on the bus.
 type NodeFlags uint16
+
+const (
+	// FlagHandshake: we've heard of this node but it hasn't answered us
+	// yet, so we can't vouch for it. Gossip about it is ignored.
+	FlagHandshake NodeFlags = 1 << iota
+)
 
 // Message is one message on the cluster bus.
 type Message struct {
@@ -100,7 +108,7 @@ func decodeMessage(v any) (Message, error) {
 	if m.Type, err = wantString(arr[0], "type"); err != nil {
 		return Message{}, err
 	}
-	if m.Type != "PING" && m.Type != "PONG" {
+	if m.Type != "PING" && m.Type != "PONG" && m.Type != "MEET" {
 		return Message{}, fmt.Errorf("cluster bus: unknown message type %q", m.Type)
 	}
 	if m.ID, err = wantString(arr[1], "id"); err != nil {

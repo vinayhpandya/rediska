@@ -45,6 +45,88 @@ func (l *Layout) Owner(slot int) *Node {
 	return l.owner[slot]
 }
 
+// ============================================================ runtime changes
+// The layout starts from cluster.conf, then the cluster bus changes it as
+// nodes learn about each other. Only dispatchWorker calls these, so routing
+// (which also runs there) always sees a consistent map, without locks.
+
+// AddNode adds a node learned while running. It owns no slots until it
+// announces some (see SetSlots).
+func (l *Layout) AddNode(n *Node) {
+	l.Nodes = append(l.Nodes, n)
+}
+
+// RemoveNode forgets n, and frees the slots it owned.
+func (l *Layout) RemoveNode(n *Node) {
+	l.SetSlots(n, nil)
+	for i, m := range l.Nodes {
+		if m == n {
+			l.Nodes = append(l.Nodes[:i:i], l.Nodes[i+1:]...)
+			return
+		}
+	}
+}
+
+// ForgetOthersSlots keeps only Self's slots, and clears every other node's.
+// The server calls it at startup in cluster mode, so that each node's slots
+// come from that node itself, over the bus, instead of from our copy of the
+// file. A node only ever speaks for its own slots.
+func (l *Layout) ForgetOthersSlots() {
+	for _, n := range l.Nodes {
+		if n != l.Self {
+			l.SetSlots(n, nil)
+		}
+	}
+}
+
+// SetSlots records the slots that n says it owns. n gives its whole set
+// each time, so slots it no longer lists are released.
+//
+// Until slots carry config epochs, the first owner wins: a slot that
+// another node already owns stays with that node. SetSlots returns the
+// slots it refused, so the caller can log them. n.Slots ends up as the
+// slots n was actually given. Never call it for Self: a node's own slots
+// change only through its own config.
+func (l *Layout) SetSlots(n *Node, announced []SlotRange) (refused []SlotRange) {
+	for s := range l.owner {
+		if l.owner[s] == n {
+			l.owner[s] = nil
+		}
+	}
+	for _, r := range announced {
+		for s := r.Start; s <= r.End; s++ {
+			if l.owner[s] == nil {
+				l.owner[s] = n
+			} else {
+				refused = appendSlot(refused, s)
+			}
+		}
+	}
+	n.Slots = l.rangesOwnedBy(n)
+	return refused
+}
+
+// rangesOwnedBy rebuilds n's slots as sorted ranges from the owner table.
+func (l *Layout) rangesOwnedBy(n *Node) []SlotRange {
+	var out []SlotRange
+	for s := range l.owner {
+		if l.owner[s] == n {
+			out = appendSlot(out, s)
+		}
+	}
+	return out
+}
+
+// appendSlot adds slot s to rs, extending the last range when s follows
+// it. Slots must be added in increasing order.
+func appendSlot(rs []SlotRange, s int) []SlotRange {
+	if k := len(rs) - 1; k >= 0 && rs[k].End == s-1 {
+		rs[k].End = s
+		return rs
+	}
+	return append(rs, SlotRange{Start: s, End: s})
+}
+
 // LoadLayout reads the cluster layout file at path. myPort is this node's
 // port, used to find which line of the file describes this node.
 func LoadLayout(path string, myPort int, myName string) (*Layout, error) {

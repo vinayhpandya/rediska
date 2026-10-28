@@ -91,6 +91,9 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 	listener, err := net.Listen("tcp", addr)
 	var bus *cluster.Bus
 	if cluster.Current != nil { // cluster mode is on
+		// Other nodes' slots come from those nodes, over the bus, not from
+		// our copy of cluster.conf: a node only speaks for its own slots.
+		cluster.Current.ForgetOthersSlots()
 		bus = cluster.NewBus(cluster.Current)
 		if err := bus.Listen(host); err != nil {
 			listener.Close()

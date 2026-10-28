@@ -33,6 +33,10 @@ func TestMessageRoundTrip(t *testing.T) {
 		{"empty slots and gossip", Message{
 			Type: "PING", ID: "abc", Name: "node1", Addr: "127.0.0.1:7001",
 		}},
+		{"MEET", Message{
+			Type: "MEET", ID: "abc", Name: "node1", Addr: "127.0.0.1:7001",
+			Slots: []SlotRange{{0, 5460}},
+		}},
 		{"everything set", Message{
 			Type: "PONG", ID: "abc", Name: "node1", Addr: "127.0.0.1:7001", Flags: 3,
 			Slots: []SlotRange{{0, 0}, {5, 5460}, {16383, 16383}},
@@ -131,11 +135,11 @@ func TestSelfMessageCarriesOwnSlots(t *testing.T) {
 		Slots: []SlotRange{{100, 199}}}
 	b := NewBus(&Layout{Nodes: []*Node{me, other}, Self: me})
 
-	got := roundTrip(t, b.self("PING"))
+	got := roundTrip(t, b.msg("PING", other.ID))
 	if !reflect.DeepEqual(got.Slots, me.Slots) {
 		t.Fatalf("slots = %v, want %v", got.Slots, me.Slots)
 	}
-	if len(got.Gossip) != 0 {
-		t.Fatalf("gossip = %v, want none yet", got.Gossip)
+	if len(got.Gossip) != 0 { // the only other node is the receiver itself
+		t.Fatalf("gossip = %v, want none", got.Gossip)
 	}
 }

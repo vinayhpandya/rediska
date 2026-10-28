@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -76,5 +77,79 @@ func TestParseLayoutErrors(t *testing.T) {
 				t.Fatal("expected an error")
 			}
 		})
+	}
+}
+
+// ============================================================ runtime changes
+
+// smallLayout is node1 (0-99), node2 (100-199) and node3 (300-399), as
+// seen by node1. Slots 200-299 and 400+ belong to nobody.
+func smallLayout(t *testing.T) *Layout {
+	t.Helper()
+	l, err := ParseLayout(strings.NewReader(`
+node1 127.0.0.1:7001 0-99
+node2 127.0.0.1:7002 100-199
+node3 127.0.0.1:7003 300-399
+`), 7001)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+func ownerName(l *Layout, slot int) string {
+	if n := l.Owner(slot); n != nil {
+		return n.Name
+	}
+	return ""
+}
+
+func TestSetSlots(t *testing.T) {
+	l := smallLayout(t)
+	node2 := l.Nodes[1]
+
+	// node2 now announces 100-299 plus node1's 42 and node3's 300-310.
+	refused := l.SetSlots(node2, []SlotRange{{250, 299}, {100, 249}, {42, 42}, {300, 310}})
+	if want := []SlotRange{{42, 42}, {300, 310}}; !slices.Equal(refused, want) {
+		t.Fatalf("refused %v, want %v (they belong to node1 and node3)", refused, want)
+	}
+	if want := []SlotRange{{100, 299}}; !slices.Equal(node2.Slots, want) {
+		t.Fatalf("node2.Slots = %v, want %v, merged and sorted", node2.Slots, want)
+	}
+	for slot, want := range map[int]string{42: "node1", 150: "node2", 250: "node2", 305: "node3"} {
+		if got := ownerName(l, slot); got != want {
+			t.Errorf("slot %d: owner %q, want %q", slot, got, want)
+		}
+	}
+
+	// Its next announcement replaces the last one: slots it drops are freed.
+	l.SetSlots(node2, []SlotRange{{100, 149}})
+	if got := ownerName(l, 200); got != "" {
+		t.Fatalf("slot 200 still owned by %q after node2 dropped it", got)
+	}
+}
+
+func TestRemoveNode(t *testing.T) {
+	l := smallLayout(t)
+	node2 := l.Nodes[1]
+	l.RemoveNode(node2)
+	if len(l.Nodes) != 2 || l.Nodes[0].Name != "node1" || l.Nodes[1].Name != "node3" {
+		t.Fatalf("nodes after removing node2: %v", l.Nodes)
+	}
+	if got := ownerName(l, 150); got != "" {
+		t.Fatalf("slot 150 still owned by %q", got)
+	}
+}
+
+func TestForgetOthersSlots(t *testing.T) {
+	l := smallLayout(t)
+	l.ForgetOthersSlots()
+	for slot, want := range map[int]string{50: "node1", 150: "", 350: ""} {
+		if got := ownerName(l, slot); got != want {
+			t.Errorf("slot %d: owner %q, want %q", slot, got, want)
+		}
+	}
+	if len(l.Nodes[1].Slots) != 0 || len(l.Nodes[0].Slots) != 1 {
+		t.Fatalf("slots after: node1 %v, node2 %v", l.Nodes[0].Slots, l.Nodes[1].Slots)
 	}
 }

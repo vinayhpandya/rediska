@@ -28,7 +28,7 @@ func handleCluster(args []string) []byte {
 	}
 	sub := strings.ToUpper(args[0])
 	arity := map[string]int{"KEYSLOT": 2, "COUNTKEYSINSLOT": 2, "GETKEYSINSLOT": 3,
-		"MYID": 1, "SLOTS": 1, "NODES": 1, "INFO": 1}
+		"MYID": 1, "SLOTS": 1, "NODES": 1, "INFO": 1, "MEET": 3}
 	if want, known := arity[sub]; known && len(args) != want {
 		return core.EncodeError(fmt.Sprintf("ERR wrong number of arguments for 'cluster|%s' command", strings.ToLower(sub)))
 	}
@@ -41,6 +41,8 @@ func handleCluster(args []string) []byte {
 		return core.EncodeBulkString(clusterNodes(cluster.Current))
 	case "INFO":
 		return core.EncodeBulkString(clusterInfo(cluster.Current))
+	case "MEET":
+		return clusterMeet(args[1], args[2])
 	case "KEYSLOT":
 		return core.EncodeInteger(int64(cluster.KeyHashSlot(args[1])))
 	case "COUNTKEYSINSLOT":
@@ -109,20 +111,43 @@ func clusterGetKeysInSlot(slotArg, countArg string) []byte {
 	return core.EncodeArray(store.Default.KeysInSlot(int(slot), int(min(count, 1<<30))))
 }
 
+// clusterMeet is CLUSTER MEET ip port: introduce this node to another one.
+// It only starts the handshake and replies OK at once, like Redis; the
+// nodes connect and agree in the background (cluster.Bus.Meet). The error
+// texts match Redis 7.
+func clusterMeet(host, portArg string) []byte {
+	port, err := strconv.Atoi(portArg)
+	if err != nil {
+		return core.EncodeError("ERR Invalid base port specified: " + portArg)
+	}
+	bus := cluster.CurrentBus
+	if bus == nil {
+		return core.EncodeError("ERR the cluster bus is not running")
+	}
+	if err := bus.Meet(host, port); err != nil {
+		return core.EncodeError(fmt.Sprintf("ERR Invalid node address specified: %s:%s", host, portArg))
+	}
+	return core.EncodeSimpleString("OK")
+}
+
 // clusterNodes builds the CLUSTER NODES text: one line per node.
 //
 //	<id> <ip:port@busport> <flags> <master> <ping-sent> <pong-recv> <epoch> <link> <slots...>
 //
-// Fields we can't know yet (no gossip until Phase 4) get fixed values:
-// ping/pong times are 0, every link is "connected", and each node's epoch
-// is its line number in cluster.conf.
+// Nodes come from the layout, which the cluster bus keeps up to date as
+// nodes meet. A node that hasn't answered us yet is flagged "handshake".
+// Each node's epoch is still its position in the list: real epochs come
+// with slot migration.
 func clusterNodes(l *cluster.Layout) string {
 	var b strings.Builder
 	for i, n := range l.Nodes {
 		host, port := splitAddr(n.Addr)
 		flags := "master"
-		if n == l.Self {
+		switch {
+		case n == l.Self:
 			flags = "myself,master"
+		case isHandshake(n):
+			flags = "handshake"
 		}
 		pingSent, pongRecv, link := nodeLinkInfo(l, n)
 		fmt.Fprintf(&b, "%s %s:%d@%d %s - %d %d %d %s",
@@ -202,6 +227,16 @@ func nodeLinkInfo(l *cluster.Layout, n *cluster.Node) (pingSent, pongRecv int64,
 		link = "connected"
 	}
 	return unixMilli(p.PingSent), unixMilli(p.PongRecv), link
+}
+
+// isHandshake reports whether the bus is still waiting for n to answer.
+func isHandshake(n *cluster.Node) bool {
+	if bus := cluster.CurrentBus; bus != nil {
+		if p := bus.Peer(n.ID); p != nil {
+			return p.Handshake
+		}
+	}
+	return false
 }
 
 // unixMilli turns a time into Unix milliseconds, with 0 for "never".
