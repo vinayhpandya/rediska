@@ -17,9 +17,21 @@ type testNode struct {
 
 // startTestNode starts a bus for self, with its own worker goroutine that
 // runs every event through Handle, one at a time, like dispatchWorker.
+//
+// Each test node gets its own copy of the nodes, as separate processes
+// would: the bus changes them (a peer's slots, say) on its own worker.
 func startTestNode(t *testing.T, nodes []*Node, self *Node) *testNode {
 	t.Helper()
-	b := NewBus(&Layout{Nodes: nodes, Self: self})
+	l := &Layout{}
+	for _, n := range nodes {
+		c := *n
+		c.Slots = append([]SlotRange(nil), n.Slots...)
+		l.Nodes = append(l.Nodes, &c)
+		if n == self {
+			l.Self = &c
+		}
+	}
+	b := NewBus(l)
 	if err := b.Listen("127.0.0.1"); err != nil {
 		t.Fatal(err)
 	}
@@ -122,5 +134,96 @@ func TestBusConnectsAndReconnects(t *testing.T) {
 
 	for _, n := range []*testNode{node1, running[1], node3} {
 		n.stop(t)
+	}
+}
+
+// Three nodes that each know only themselves. node2 and node3 are
+// introduced only to node1; gossip has to tell them about each other, and
+// each node has to learn the others' slots from the others themselves.
+func TestMeetSpreadsByGossip(t *testing.T) {
+	// Client ports 27011-27013, so the bus uses 37011-37013.
+	ranges := []SlotRange{{0, 5460}, {5461, 10922}, {10923, 16383}}
+	var running []*testNode
+	for i := 1; i <= 3; i++ {
+		port := 27010 + i
+		self := &Node{
+			Name:  fmt.Sprintf("node%d", i),
+			Addr:  fmt.Sprintf("127.0.0.1:%d", port),
+			Port:  port,
+			ID:    fmt.Sprintf("meet-node-%d", i),
+			Slots: []SlotRange{ranges[i-1]},
+		}
+		running = append(running, startTestNode(t, []*Node{self}, self))
+	}
+	defer func() {
+		for _, n := range running {
+			n.stop(t)
+		}
+	}()
+	// startTestNode doesn't fill owner[]; give each node its own slots.
+	for _, n := range running {
+		n.onWorker(func() { setOwnSlots(n.bus.layout) })
+	}
+
+	for _, n := range running[1:] {
+		n.onWorker(func() {
+			if err := n.bus.Meet("127.0.0.1", 27011); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+
+	for _, n := range running {
+		n.waitFor(t, "it knows both other nodes, trusts them, and has every slot", func(b *Bus) bool {
+			if len(b.Peers()) != 2 || !allUp(b) {
+				return false
+			}
+			for _, p := range b.Peers() {
+				if p.Handshake {
+					return false
+				}
+			}
+			for s := 0; s < NumSlots; s++ {
+				if b.layout.Owner(s) == nil {
+					return false
+				}
+			}
+			return true
+		})
+	}
+	// And the slots went to the right nodes.
+	running[1].onWorker(func() {
+		for slot, want := range map[int]string{0: "node1", 8000: "node2", 16383: "node3"} {
+			if got := running[1].bus.layout.Owner(slot); got == nil || got.Name != want {
+				t.Errorf("node2 thinks slot %d belongs to %v, want %s", slot, got, want)
+			}
+		}
+	})
+}
+
+// A MEET to an address where nobody answers is forgotten after the
+// handshake timeout, so it doesn't stay in CLUSTER NODES forever.
+func TestMeetDeadAddressIsForgotten(t *testing.T) {
+	old := handshakeTimeout
+	handshakeTimeout = 500 * time.Millisecond
+	defer func() { handshakeTimeout = old }()
+
+	self := &Node{Name: "node1", Addr: "127.0.0.1:27021", Port: 27021, ID: "dead-test-1"}
+	n := startTestNode(t, []*Node{self}, self)
+	defer n.stop(t)
+
+	n.onWorker(func() { n.bus.Meet("127.0.0.1", 27029) }) // nothing listens on 37029
+	n.waitFor(t, "the dead address is in the peer list", func(b *Bus) bool { return len(b.Peers()) == 1 })
+	n.waitFor(t, "the dead address is forgotten", func(b *Bus) bool {
+		return len(b.Peers()) == 0 && len(b.layout.Nodes) == 1
+	})
+}
+
+// setOwnSlots fills the owner table from Self's slots, as ParseLayout would.
+func setOwnSlots(l *Layout) {
+	for _, r := range l.Self.Slots {
+		for s := r.Start; s <= r.End; s++ {
+			l.owner[s] = l.Self
+		}
 	}
 }

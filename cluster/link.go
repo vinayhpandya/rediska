@@ -12,6 +12,7 @@ type link struct {
 	out       chan []byte   // the outbox: encoded messages waiting to be written
 	closed    chan struct{} // closed when the link is closed; stops the writer
 	closeOnce sync.Once     // makes close() safe to call more than once
+	conn      net.Conn      // the socket; close() closes it (nil in unit tests)
 }
 
 // startLink makes the outbox for conn and starts its writer goroutine.
@@ -20,6 +21,7 @@ func (b *Bus) startLink(conn net.Conn) *link {
 	l := &link{
 		out:    make(chan []byte, sendQueueSize), // room for 64 messages
 		closed: make(chan struct{}),
+		conn:   conn,
 	}
 	b.wg.Add(1) // count the writer, so Wait waits for it
 	go func() { // ---- the writer goroutine ----
@@ -35,7 +37,7 @@ func (b *Bus) startLink(conn net.Conn) *link {
 					return
 				}
 			case <-l.closed:
-				return // readLoop closed the link
+				return // the link was closed (and with it, conn)
 			case <-b.ctx.Done():
 				conn.Close() // server is shutting down
 				return
@@ -57,7 +59,18 @@ func (l *link) send(m Message) bool {
 	}
 }
 
-// close stops the writer. Safe to call more than once.
+// close stops the writer and closes the socket, which makes readLoop
+// return too. Safe to call more than once, from any goroutine.
+//
+// Closing the socket matters when dispatchWorker drops a link it doesn't
+// want (an unknown peer in linkUp, or a peer it forgets): before, only the
+// writer stopped, and the reader sat on the open socket until the other
+// side hung up.
 func (l *link) close() {
-	l.closeOnce.Do(func() { close(l.closed) })
+	l.closeOnce.Do(func() {
+		close(l.closed)
+		if l.conn != nil {
+			l.conn.Close()
+		}
+	})
 }
