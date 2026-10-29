@@ -5,10 +5,12 @@ Redis Cluster does. Each node holds only its share, and clients are sent to
 the right node.
 
 !!! info "Current scope"
-The cluster layout is **fixed**: every node reads it from a file at
-startup. Nodes check on each other over the [cluster bus](#the-cluster-bus),
-but they don't share the layout or detect failures yet, slots can't move
-while running, and there are no replicas. See [Limitations](#limitations).
+Every node starts from a layout file. After that, nodes talk over the
+[cluster bus](#the-cluster-bus): they learn each other's slots, add nodes
+with [`CLUSTER MEET`](#adding-a-node-with-cluster-meet), and
+[agree when a node has failed](#failure-detection). Slots can't move while
+running yet, and there are no replicas or failover. See
+[Limitations](#limitations).
 
 ## Slots
 
@@ -54,8 +56,8 @@ transaction.
 
 ## The layout file
 
-Every node reads the same layout file, which lists every node, its address
-and the slots it owns:
+Every node starts from the same layout file, which lists every node, its
+address and the slots it owns:
 
 ```text title="cluster.conf"
 # name   address          slots
@@ -84,6 +86,10 @@ rediska --port 7003 --cluster-enabled --cluster-config-file cluster.conf
 Each node also listens on its client port + 10000 (here 17001–17003) for the
 [cluster bus](#the-cluster-bus), so those ports must be free too.
 
+A node takes **its own** slots from the file. It learns every other node's
+slots from that node, over the bus, a moment after they connect: a node
+only ever speaks for its own slots.
+
 ### The cluster script
 
 `scripts/cluster.sh` does all of that for you:
@@ -97,7 +103,9 @@ Each node also listens on its client port + 10000 (here 17001–17003) for the
 
 Files go in `/tmp/rediska-cluster/`. `NODES=4 ./scripts/cluster.sh start`
 starts 4 nodes with the slots split evenly (run `clean` first if you change
-the number of nodes).
+the number of nodes). The script starts nodes with a 3-second
+[node timeout](#failure-detection), so failures show up quickly; set
+`NODE_TIMEOUT` (in milliseconds) to change it.
 
 ## How a command is routed
 
@@ -112,7 +120,9 @@ flowchart TD
     C -- no --> X1["CROSSSLOT Keys in request<br/>don't hash to the same slot"]
     C -- yes --> D{does anyone own the slot?}
     D -- no --> X2["CLUSTERDOWN Hash slot not served"]
-    D -- yes --> E{is it me?}
+    D -- yes --> F{has the owner<br/>been marked FAIL?}
+    F -- yes --> X2
+    F -- no --> E{is it me?}
     E -- no --> X3["MOVED &lt;slot&gt; &lt;host:port&gt;"]
     E -- yes --> RUN
 ```
@@ -140,30 +150,124 @@ Every node opens a second port for other nodes, at its client port + 10000
 
 Over the bus, each node:
 
-- connects to every other node in `cluster.conf`, retrying every second if
-  one isn't up yet
+- connects to every node it knows (from `cluster.conf`, `CLUSTER MEET` or
+  gossip), retrying every second if one isn't up yet
 - sends each connected node a `PING` once a second, and answers every `PING`
   with a `PONG`
 - notices when a connection closes, shows that node as `disconnected`, and
   reconnects by itself when it comes back
+- takes each node's slots from what that node announces
+- learns about new nodes from gossip, and
+  [detects failed nodes](#failure-detection)
 
 Messages use RESP, the same format as client commands. Each one is an array
-of 7 items: type, the sender's ID, name, address and flags, the sender's own
-slots (as start/end pairs), and a gossip section listing other nodes. You can
-talk to the bus by hand:
+of 7 items: type (`PING`, `PONG`, `MEET` or `FAIL`), the sender's ID, name,
+address and flags, the sender's own slots (as start/end pairs), and a gossip
+section: a few other nodes the sender knows, each with its flags and
+ping/pong times. You can talk to the bus by hand:
 
 ```console
 $ (printf '*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n'; sleep 1) | nc localhost 17001
 ```
 
 The reply is a `PONG` carrying node1's ID, name, address and slots
-(`0 5460`). Nodes don't act on the slots or gossip sections yet; they're
-there for gossip, which comes next.
+(`0 5460`), and some gossip. node1 doesn't add the sender or act on what it
+says, because it doesn't know it: only a `MEET` can introduce a new node.
 
 Bus work runs on the same goroutine as client commands, so cluster state,
 like the data, needs no locks. See
 [Goroutines in a cluster node](design-decisions.md#goroutines-in-a-cluster-node)
 for which goroutine does what.
+
+## Adding a node with CLUSTER MEET
+
+`CLUSTER MEET ip port` (the node's client port) introduces a node to the
+cluster. You only need to tell **one** node; gossip tells the rest.
+
+```console
+$ redis-cli -p 7001 cluster meet 127.0.0.1 7004
+OK
+```
+
+What happens next:
+
+1. node1 adds node4 in `handshake` (it doesn't know node4's ID yet),
+   connects to its bus port and sends a `MEET`.
+2. node4 doesn't know node1, but a `MEET` is allowed to introduce a node,
+   so it adds node1, connects back, and answers with a `PONG`.
+3. node1 gets the `PONG` on the connection it opened, learns node4's real
+   ID, and trusts it from then on.
+4. node1's next PINGs to node2 and node3 gossip about node4. They don't
+   know it, so each does its own handshake with node4.
+
+A second or two later, every node's `CLUSTER NODES` lists all four.
+
+Two rules keep strangers out:
+
+- **Only a `MEET` adds a node we don't know.** A node that gossip mentions
+  gets a handshake first.
+- **A node is trusted only once it answers on a connection we opened.**
+  Anyone can claim an address in a message; only the node really there can
+  answer. A node in handshake that never answers is forgotten after 10
+  seconds.
+
+Each node gossips about a tenth of the nodes it knows (at least 3), picked
+at random for each message, so no message lists the whole cluster, yet
+everyone hears about everyone within a few rounds.
+
+!!! note
+    Every line in `cluster.conf` must own at least one slot, so for now a
+    new node has to start with slots no other node owns. Nodes learned by
+    `MEET` aren't saved to disk: a node that restarts has forgotten them
+    until they reconnect to it (their first message is always a `MEET`).
+
+## Failure detection
+
+Nodes agree that a node has failed in two stages, as in Redis:
+
+| Stage | `CLUSTER NODES` | Meaning |
+| --- | --- | --- |
+| **PFAIL** | `master,fail?` | **This** node hasn't heard from it for longer than `--cluster-node-timeout`. One node's suspicion; nothing changes for clients. |
+| **FAIL** | `master,fail` | A majority of masters agree. Keys in its slots get `CLUSTERDOWN`. |
+
+Here's what happens when node3 stops, with a 3-second timeout:
+
+1. node1's connection to node3 closes, and node1 starts the clock. Its
+   reconnect attempts fail.
+2. 3 seconds later, node1 marks node3 **PFAIL**. node2 does the same.
+3. Every PING now carries that suspicion: gossip always includes the
+   nodes the sender suspects. Each one counts as a **failure report**.
+4. node2 suspects node3 itself and has node1's report: 2 of the 3 masters,
+   a majority. It marks node3 **FAIL** and sends a `FAIL` message to every
+   node, so they mark it at once.
+5. When node3 comes back and answers a PING, each node clears PFAIL and
+   FAIL.
+
+```console
+$ redis-cli -p 7001 cluster nodes
+...  127.0.0.1:7003@17003 master,fail - 1793307217542 1793307216796 3 disconnected 10923-16383
+$ redis-cli -p 7001 cluster info
+cluster_state:fail
+cluster_slots_assigned:16384
+cluster_slots_ok:10923
+cluster_slots_pfail:0
+cluster_slots_fail:5461
+...
+$ redis-cli -p 7001 get foo
+(error) CLUSTERDOWN Hash slot not served
+```
+
+Why a majority: one node's own network link might be the problem. If only
+node1 can't reach node3, node2 still hears node3 fine, never reports it,
+and node3 never becomes FAIL. And the two halves of a split network can't
+both declare the other dead. A report counts for twice the node timeout,
+so old suspicions fade once a node stops repeating them.
+
+With only **two** masters, a survivor can never reach a majority alone, so
+the other node stays `fail?`. Redis behaves the same way.
+
+The timeout is `--cluster-node-timeout`, in milliseconds. The default is
+15000, as in Redis; `scripts/cluster.sh` uses 3000.
 
 ## Transactions
 
@@ -225,7 +329,8 @@ QUEUED
 | `CLUSTER SLOTS`                    | slot ranges and their owners                               | client libraries, to learn the map                 |
 | `CLUSTER NODES`                    | one line per node                                          | `redis-cli --cluster`, `redis-benchmark --cluster` |
 | `CLUSTER MYID`                     | this node's 40-character ID                                | debugging                                          |
-| `CLUSTER INFO`                     | `cluster_state:ok` if every slot has an owner, plus counts | monitoring                                         |
+| `CLUSTER INFO`                     | `cluster_state:ok` if every slot has a working owner, plus counts | monitoring                                  |
+| `CLUSTER MEET ip port`             | `OK`, then the node joins by handshake and gossip          | adding a node                                      |
 
 `INFO cluster` reports `cluster_enabled:1` on a cluster node.
 
@@ -257,6 +362,14 @@ means none pending, or never), and the link state is `connected` or
 `disconnected`. Run it twice: on a healthy cluster, the pong times move
 forward every second.
 
+The flags column shows `myself` on the node you asked, `handshake` for a
+node that hasn't answered yet, and `fail?` or `fail` for a node this node
+suspects or the cluster agreed has failed (see
+[Failure detection](#failure-detection)). In `CLUSTER INFO`,
+`cluster_slots_pfail` and `cluster_slots_fail` count those nodes' slots,
+and `cluster_state` is `fail` while any slot is unowned or owned by a FAIL
+node.
+
 ### Tools that work
 
 - `redis-cli -c`: follows redirects.
@@ -275,11 +388,15 @@ never dropped, even if the layout file changed while it was down.
 
 ## Limitations
 
-- **Fixed layout, no gossip yet**: every node learns the layout from
-  `cluster.conf` and connects to every node in it. There's no
-  `CLUSTER MEET`; to change the layout, edit the file and restart the nodes.
-- **No failure detection yet**: a stopped node shows as `disconnected`,
-  but nodes don't yet agree that it has failed, and routing doesn't change.
-- **No slot migration**: slots can't move between running nodes.
-- **No replicas or failover**: if a node goes down, its slots are
-  unavailable until it comes back.
+- **Nothing is saved**: nodes don't write what they learn to a
+  `nodes.conf`. A node that restarts knows only `cluster.conf` until the
+  others reconnect to it, and if every node restarts, nodes added with
+  `CLUSTER MEET` are gone.
+- **No empty nodes**: every `cluster.conf` line must own at least one slot.
+- **No slot migration**: slots can't move between running nodes, and if
+  two nodes claim the same slot, the first owner keeps it (no config
+  epochs yet).
+- **No replicas or failover**: a FAIL node's slots get `CLUSTERDOWN` until
+  it comes back.
+- **Every node PINGs every node once a second**: fine for a few nodes;
+  Redis's schedule (about one random node a second) scales better.

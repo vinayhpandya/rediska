@@ -129,6 +129,7 @@ rediska --port 7379 --maxmemory 100 --maxmemory-policy allkeys-lru
 | `--cluster-enabled`     | off          | run as a cluster node                                              |
 | `--cluster-node-name`   |              | this node's name in the layout file (default: find it by `--port`) |
 | `--cluster-config-file` |              | cluster layout file (required with `--cluster-enabled`)            |
+| `--cluster-node-timeout`| `15000`      | ms without an answer before another node is suspected to have failed |
 | `--pprof-addr`          | off          | serve Go's profiler, e.g. `localhost:6060`                         |
 | `--version`             |              | print the version and exit                                         |
 
