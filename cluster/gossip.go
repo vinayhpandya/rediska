@@ -34,7 +34,11 @@ func (b *Bus) learnFrom(m Message) {
 	}
 	b.applySlots(p, m.Slots)
 	for _, g := range m.Gossip {
-		b.learnNode(g, p)
+		if q := b.peers[g.ID]; q != nil {
+			b.noteReport(q, p, g.Flags)
+		} else {
+			b.learnNode(g, p)
+		}
 	}
 }
 
@@ -106,6 +110,14 @@ func (b *Bus) dropPeer(p *Peer) {
 	b.layout.RemoveNode(p.Node)
 }
 
+// gossipEntry is what we tell other nodes about p, including its health.
+func gossipEntry(p *Peer) GossipEntry {
+	return GossipEntry{
+		ID: p.Node.ID, Name: p.Node.Name, Addr: p.Node.Addr, Flags: p.flags,
+		PingSent: unixMilli(p.PingSent), PongRecv: unixMilli(p.PongRecv),
+	}
+}
+
 // ================================================================== sending
 
 // pickGossip chooses which nodes to tell the node with ID to about: a few
@@ -128,10 +140,12 @@ func (b *Bus) pickGossip(to string) []GossipEntry {
 	})
 	out := make([]GossipEntry, 0, want)
 	for _, p := range candidates[:want] {
-		out = append(out, GossipEntry{
-			ID: p.Node.ID, Name: p.Node.Name, Addr: p.Node.Addr,
-			PingSent: unixMilli(p.PingSent), PongRecv: unixMilli(p.PongRecv),
-		})
+		out = append(out, gossipEntry(p))
+	}
+	for _, p := range candidates[want:] { // the rest: add any we suspect
+		if p.PFail() {
+			out = append(out, gossipEntry(p))
+		}
 	}
 	return out
 }

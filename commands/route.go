@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/core"
 )
@@ -65,7 +66,7 @@ func checkKeys(keys []string) []byte {
 
 	// ③ Somebody must own that slot.
 	owner := layout.Owner(slot)
-	if owner == nil {
+	if owner == nil || ownerFailed(owner) {
 		return core.EncodeError("CLUSTERDOWN Hash slot not served")
 	}
 
@@ -74,4 +75,15 @@ func checkKeys(keys []string) []byte {
 		return core.EncodeError(fmt.Sprintf("MOVED %d %s", slot, owner.Addr))
 	}
 	return nil
+}
+
+// ownerFailed reports whether the cluster bus has marked n FAIL. Only FAIL
+// counts, not PFAIL: one node's suspicion isn't enough to refuse a slot.
+func ownerFailed(n *cluster.Node) bool {
+	if bus := cluster.CurrentBus; bus != nil {
+		if p := bus.Peer(n.ID); p != nil {
+			return p.Failed()
+		}
+	}
+	return false
 }

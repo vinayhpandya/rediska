@@ -18,7 +18,7 @@ set -euo pipefail
 NODES=${NODES:-3}
 BASE_PORT=${BASE_PORT:-7001}
 DIR=${DIR:-/tmp/rediska-cluster}
-
+NODE_TIMEOUT=${NODE_TIMEOUT:-3000}
 # Always work from the repo root, wherever the script is called from.
 cd "$(dirname "$0")/.."
 BIN="$PWD/rediska"
@@ -63,6 +63,7 @@ start() {
 			continue
 		fi
 		"$BIN" --port "$p" --cluster-enabled --cluster-config-file "$DIR/cluster.conf" \
+			--cluster-node-timeout "$NODE_TIMEOUT" \
 			--appendOnly --appendOnlyFile "$DIR/node-$p.aof" \
 			>"$DIR/node-$p.log" 2>&1 &
 		echo $! >"$DIR/node-$p.pid"

@@ -148,6 +148,10 @@ func clusterNodes(l *cluster.Layout) string {
 			flags = "myself,master"
 		case isHandshake(n):
 			flags = "handshake"
+		case health(n) == "fail":
+			flags = "master,fail"
+		case health(n) == "pfail":
+			flags = "master,fail?"
 		}
 		pingSent, pongRecv, link := nodeLinkInfo(l, n)
 		fmt.Fprintf(&b, "%s %s:%d@%d %s - %d %d %d %s",
@@ -169,10 +173,19 @@ func clusterNodes(l *cluster.Layout) string {
 // the slots we do own; unowned ones get CLUSTERDOWN, as decided in 2a.)
 func clusterInfo(l *cluster.Layout) string {
 	assigned, size := 0, 0
+	pfail, fail := 0, 0
 	myEpoch := 0
 	for i, n := range l.Nodes {
+		count := 0
 		for _, r := range n.Slots {
-			assigned += r.End - r.Start + 1
+			count += r.End - r.Start + 1
+		}
+		assigned += count
+		switch health(n) {
+		case "fail":
+			fail += count
+		case "pfail":
+			pfail += count
 		}
 		if len(n.Slots) > 0 {
 			size++ // cluster_size = nodes serving at least one slot
@@ -182,15 +195,15 @@ func clusterInfo(l *cluster.Layout) string {
 		}
 	}
 	state := "ok"
-	if assigned < cluster.NumSlots {
+	if assigned < cluster.NumSlots || fail > 0 {
 		state = "fail"
 	}
 	lines := []string{
 		"cluster_state:" + state,
 		"cluster_slots_assigned:" + strconv.Itoa(assigned),
-		"cluster_slots_ok:" + strconv.Itoa(assigned),
-		"cluster_slots_pfail:0",
-		"cluster_slots_fail:0",
+		"cluster_slots_ok:" + strconv.Itoa(assigned-pfail-fail),
+		"cluster_slots_pfail:" + strconv.Itoa(pfail),
+		"cluster_slots_fail:" + strconv.Itoa(fail),
 		"cluster_known_nodes:" + strconv.Itoa(len(l.Nodes)),
 		"cluster_size:" + strconv.Itoa(size),
 		"cluster_current_epoch:" + strconv.Itoa(len(l.Nodes)),
@@ -227,6 +240,22 @@ func nodeLinkInfo(l *cluster.Layout, n *cluster.Node) (pingSent, pongRecv int64,
 		link = "connected"
 	}
 	return unixMilli(p.PingSent), unixMilli(p.PongRecv), link
+}
+
+// health returns what the bus thinks of n: "fail", "pfail", or "" for
+// fine (or for us, or when no bus is running).
+func health(n *cluster.Node) string {
+	if bus := cluster.CurrentBus; bus != nil {
+		if p := bus.Peer(n.ID); p != nil {
+			switch {
+			case p.Failed():
+				return "fail"
+			case p.PFail():
+				return "pfail"
+			}
+		}
+	}
+	return ""
 }
 
 // isHandshake reports whether the bus is still waiting for n to answer.
