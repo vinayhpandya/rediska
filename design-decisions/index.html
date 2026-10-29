@@ -526,10 +526,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#one-shared-layout-file-read-at-startup" class="md-nav__link">
+  <a href="#a-layout-file-to-start-from-gossip-after-that" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One shared layout file, read at startup
+        A layout file to start from, gossip after that
       
     </span>
   </a>
@@ -629,6 +629,72 @@
     <span class="md-ellipsis">
       
         The worker never waits on the network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#only-meet-adds-a-stranger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Only MEET adds a stranger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-node-speaks-only-for-its-own-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A node speaks only for its own slots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-needs-a-majority-of-masters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL needs a majority of masters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-failure-clock-starts-when-a-node-cant-be-reached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The failure clock starts when a node can't be reached
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-clears-when-the-node-answers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL clears when the node answers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-failed-nodes-slots-get-clusterdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A failed node's slots get CLUSTERDOWN
       
     </span>
   </a>
@@ -1155,10 +1221,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#one-shared-layout-file-read-at-startup" class="md-nav__link">
+  <a href="#a-layout-file-to-start-from-gossip-after-that" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One shared layout file, read at startup
+        A layout file to start from, gossip after that
       
     </span>
   </a>
@@ -1264,6 +1330,72 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#only-meet-adds-a-stranger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Only MEET adds a stranger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-node-speaks-only-for-its-own-slots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A node speaks only for its own slots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-needs-a-majority-of-masters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL needs a majority of masters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-failure-clock-starts-when-a-node-cant-be-reached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The failure clock starts when a node can't be reached
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-clears-when-the-node-answers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL clears when the node answers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-failed-nodes-slots-get-clusterdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A failed node's slots get CLUSTERDOWN
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1356,18 +1488,22 @@ word for word.</p>
 <p><strong>Why:</strong> existing tools (<code>redis-cli -c</code>, <code>redis-benchmark --cluster</code>,
 <code>redis-cli --cluster check</code>) work against Rediska unchanged, and each piece
 maps to a part of Redis you can read about.</p>
-<h3 id="one-shared-layout-file-read-at-startup">One shared layout file, read at startup<a class="headerlink" href="#one-shared-layout-file-read-at-startup" title="Permanent link">&para;</a></h3>
-<p><strong>Choice:</strong> every node reads the same <code>cluster.conf</code>.</p>
-<p><strong>Why:</strong> you can see the whole cluster in one place, and every node is
-guaranteed to agree. Real Redis has nodes discover each other (gossip),
-which comes later; doing it in this order keeps redirect bugs and gossip
-bugs apart.</p>
-<p><strong>Cost:</strong> changing the layout means editing the file and restarting.</p>
+<h3 id="a-layout-file-to-start-from-gossip-after-that">A layout file to start from, gossip after that<a class="headerlink" href="#a-layout-file-to-start-from-gossip-after-that" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> every node reads <code>cluster.conf</code> at startup, to know which nodes
+to connect to and which slots it owns itself. After that, the bus takes
+over: other nodes' slots come from those nodes, and new nodes arrive by
+<code>CLUSTER MEET</code> and gossip.</p>
+<p><strong>Why:</strong> the file came first (Phase 2), so redirects could be built and
+tested before any networking existed, keeping redirect bugs and gossip bugs
+apart. Keeping it as the starting point means a fresh cluster still comes up
+with one command.</p>
+<p><strong>Cost:</strong> nodes don't save what they learn yet, so if every node
+restarts, a node added with <code>CLUSTER MEET</code> is gone.</p>
 <h3 id="find-yourself-by-port">Find yourself by port<a class="headerlink" href="#find-yourself-by-port" title="Permanent link">&para;</a></h3>
 <p><strong>Choice:</strong> a node finds its own line in the layout by its <code>--port</code>.</p>
 <p><strong>Why:</strong> simplest for running several nodes on one machine.</p>
 <p><strong>Cost:</strong> doesn't work across machines, where nodes typically all use the
-same port. A <code>--cluster-node-name</code> flag is the planned fix.</p>
+same port. For that, <code>--cluster-node-name</code> finds the line by name instead.</p>
 <h3 id="unowned-slots-fail-one-at-a-time">Unowned slots fail one at a time<a class="headerlink" href="#unowned-slots-fail-one-at-a-time" title="Permanent link">&para;</a></h3>
 <p><strong>Choice:</strong> a slot missing from the layout gets <code>CLUSTERDOWN Hash slot not
 served</code>; every other slot keeps working. <code>CLUSTER INFO</code> still reports
@@ -1545,6 +1681,71 @@ it could race with <code>Wait</code> at shutdown.</p>
 <p><strong>Cost:</strong> a message to a stuck node can be lost. That's fine for <code>PING</code>,
 which is sent again a second later; anything sent over the bus must be
 safe to lose.</p>
+<h3 id="only-meet-adds-a-stranger">Only MEET adds a stranger<a class="headerlink" href="#only-meet-adds-a-stranger" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> a node we don't know can join only with a <code>MEET</code> (sent after
+<code>CLUSTER MEET</code>). A node that gossip mentions gets a handshake first: we
+connect to the address given and send it a <code>MEET</code>. We trust a node, and act
+on what it says, only once it answers with a <code>PONG</code> on a connection <strong>we</strong>
+opened. One that never answers is forgotten after 10 seconds.</p>
+<p><strong>Why:</strong> anyone can put any ID and address in a message. Only the node
+really at that address can answer on a connection we dialled. Without
+this, any process that can reach the bus port could add itself to the
+cluster with a <code>PING</code>. Redis has the same rule.</p>
+<p><strong>Cost:</strong> a new node takes a round trip or two to become trusted.</p>
+<h3 id="a-node-speaks-only-for-its-own-slots">A node speaks only for its own slots<a class="headerlink" href="#a-node-speaks-only-for-its-own-slots" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> each message's header carries the sender's own slots, and
+that's the only way we learn who owns what. Gossip entries say a node
+exists, never what it owns. If two nodes claim the same slot, the one that
+claimed it first keeps it.</p>
+<p><strong>Why:</strong> a node is the authority on its own slots, and second-hand claims
+could be stale. "First owner wins" is a placeholder: Redis settles
+conflicts with config epochs (the higher epoch wins), which come with slot
+migration.</p>
+<p><strong>Cost:</strong> until epochs, a slot can't move from one node to another while
+both are running.</p>
+<h3 id="fail-needs-a-majority-of-masters">FAIL needs a majority of masters<a class="headerlink" href="#fail-needs-a-majority-of-masters" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> failure detection has two stages, as in Redis. A node that
+hasn't answered for <code>--cluster-node-timeout</code> is <strong>PFAIL</strong> (one node's
+suspicion). It becomes <strong>FAIL</strong> only when a node suspects it itself and,
+counting itself, a majority of masters (nodes owning slots) have reported
+it in their gossip. That node then broadcasts a <code>FAIL</code> message.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant N1 as node1
+    participant N2 as node2
+    Note over N1,N2: node3 stops answering
+    Note over N1: after the timeout: node3 PFAIL
+    Note over N2: after the timeout: node3 PFAIL
+    N1-&gt;&gt;N2: PING, gossip: node3 PFAIL
+    Note over N2: me + node1 = 2 of 3 masters: node3 FAIL
+    N2-&gt;&gt;N1: FAIL node3
+    Note over N1: node3 FAIL</code></pre>
+<p><strong>Why:</strong> one node's view isn't enough: its own network link might be the
+problem. Requiring a majority means one bad connection can't take another
+node out, and the two halves of a split network can't both declare the
+other dead. Broadcasting <code>FAIL</code> means nodes don't each have to wait to
+count reports.</p>
+<p><strong>Cost:</strong> detection takes the timeout plus up to a second of gossip. With
+only two masters, a survivor can never reach a majority alone, so the other
+node stays <code>fail?</code>, never <code>fail</code>. Redis behaves the same way.</p>
+<h3 id="the-failure-clock-starts-when-a-node-cant-be-reached">The failure clock starts when a node can't be reached<a class="headerlink" href="#the-failure-clock-starts-when-a-node-cant-be-reached" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> a peer's <code>PingSent</code> means "waiting for an answer since". It's
+set when we send a PING, and also when the connection drops or a dial
+fails.</p>
+<p><strong>Why:</strong> with no connection, no PINGs go out. If only a PING started the
+clock, a node that died just after answering would never look late.</p>
+<h3 id="fail-clears-when-the-node-answers">FAIL clears when the node answers<a class="headerlink" href="#fail-clears-when-the-node-answers" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> when a FAIL node answers our PING again, we clear its PFAIL and
+FAIL right away.</p>
+<p><strong>Why:</strong> Rediska has no replicas yet, so nothing can have taken over the
+failed node's slots: if it's back, its slots are back. Redis is stricter,
+because a replica may have been promoted in the meantime. This changes
+with failover.</p>
+<h3 id="a-failed-nodes-slots-get-clusterdown">A failed node's slots get CLUSTERDOWN<a class="headerlink" href="#a-failed-nodes-slots-get-clusterdown" title="Permanent link">&para;</a></h3>
+<p><strong>Choice:</strong> keys in a slot whose owner is FAIL get <code>CLUSTERDOWN Hash slot
+not served</code>. Only FAIL counts; PFAIL doesn't change routing.</p>
+<p><strong>Why:</strong> a <code>MOVED</code> to a dead node would only send the client somewhere it
+will time out. This matches the earlier choice for unowned slots: only the
+slots that are down fail, and every other slot keeps working.</p>
 <h2 id="tests-start-real-processes">Tests start real processes<a class="headerlink" href="#tests-start-real-processes" title="Permanent link">&para;</a></h2>
 <p><strong>Choice:</strong> the end-to-end test starts three real <code>rediska</code> processes
 instead of three servers inside one test.</p>
