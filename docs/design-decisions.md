@@ -73,16 +73,20 @@ word for word.
 `redis-cli --cluster check`) work against Rediska unchanged, and each piece
 maps to a part of Redis you can read about.
 
-### One shared layout file, read at startup
+### A layout file to start from, gossip after that
 
-**Choice:** every node reads the same `cluster.conf`.
+**Choice:** every node reads `cluster.conf` at startup, to know which nodes
+to connect to and which slots it owns itself. After that, the bus takes
+over: other nodes' slots come from those nodes, and new nodes arrive by
+`CLUSTER MEET` and gossip.
 
-**Why:** you can see the whole cluster in one place, and every node is
-guaranteed to agree. Real Redis has nodes discover each other (gossip),
-which comes later; doing it in this order keeps redirect bugs and gossip
-bugs apart.
+**Why:** the file came first (Phase 2), so redirects could be built and
+tested before any networking existed, keeping redirect bugs and gossip bugs
+apart. Keeping it as the starting point means a fresh cluster still comes up
+with one command.
 
-**Cost:** changing the layout means editing the file and restarting.
+**Cost:** nodes don't save what they learn yet, so if every node
+restarts, a node added with `CLUSTER MEET` is gone.
 
 ### Find yourself by port
 
@@ -91,7 +95,7 @@ bugs apart.
 **Why:** simplest for running several nodes on one machine.
 
 **Cost:** doesn't work across machines, where nodes typically all use the
-same port. A `--cluster-node-name` flag is the planned fix.
+same port. For that, `--cluster-node-name` finds the line by name instead.
 
 ### Unowned slots fail one at a time
 
@@ -230,6 +234,95 @@ it could race with `Wait` at shutdown.
 **Cost:** a message to a stuck node can be lost. That's fine for `PING`,
 which is sent again a second later; anything sent over the bus must be
 safe to lose.
+
+### Only MEET adds a stranger
+
+**Choice:** a node we don't know can join only with a `MEET` (sent after
+`CLUSTER MEET`). A node that gossip mentions gets a handshake first: we
+connect to the address given and send it a `MEET`. We trust a node, and act
+on what it says, only once it answers with a `PONG` on a connection **we**
+opened. One that never answers is forgotten after 10 seconds.
+
+**Why:** anyone can put any ID and address in a message. Only the node
+really at that address can answer on a connection we dialled. Without
+this, any process that can reach the bus port could add itself to the
+cluster with a `PING`. Redis has the same rule.
+
+**Cost:** a new node takes a round trip or two to become trusted.
+
+### A node speaks only for its own slots
+
+**Choice:** each message's header carries the sender's own slots, and
+that's the only way we learn who owns what. Gossip entries say a node
+exists, never what it owns. If two nodes claim the same slot, the one that
+claimed it first keeps it.
+
+**Why:** a node is the authority on its own slots, and second-hand claims
+could be stale. "First owner wins" is a placeholder: Redis settles
+conflicts with config epochs (the higher epoch wins), which come with slot
+migration.
+
+**Cost:** until epochs, a slot can't move from one node to another while
+both are running.
+
+### FAIL needs a majority of masters
+
+**Choice:** failure detection has two stages, as in Redis. A node that
+hasn't answered for `--cluster-node-timeout` is **PFAIL** (one node's
+suspicion). It becomes **FAIL** only when a node suspects it itself and,
+counting itself, a majority of masters (nodes owning slots) have reported
+it in their gossip. That node then broadcasts a `FAIL` message.
+
+```mermaid
+sequenceDiagram
+    participant N1 as node1
+    participant N2 as node2
+    Note over N1,N2: node3 stops answering
+    Note over N1: after the timeout: node3 PFAIL
+    Note over N2: after the timeout: node3 PFAIL
+    N1->>N2: PING, gossip: node3 PFAIL
+    Note over N2: me + node1 = 2 of 3 masters: node3 FAIL
+    N2->>N1: FAIL node3
+    Note over N1: node3 FAIL
+```
+
+**Why:** one node's view isn't enough: its own network link might be the
+problem. Requiring a majority means one bad connection can't take another
+node out, and the two halves of a split network can't both declare the
+other dead. Broadcasting `FAIL` means nodes don't each have to wait to
+count reports.
+
+**Cost:** detection takes the timeout plus up to a second of gossip. With
+only two masters, a survivor can never reach a majority alone, so the other
+node stays `fail?`, never `fail`. Redis behaves the same way.
+
+### The failure clock starts when a node can't be reached
+
+**Choice:** a peer's `PingSent` means "waiting for an answer since". It's
+set when we send a PING, and also when the connection drops or a dial
+fails.
+
+**Why:** with no connection, no PINGs go out. If only a PING started the
+clock, a node that died just after answering would never look late.
+
+### FAIL clears when the node answers
+
+**Choice:** when a FAIL node answers our PING again, we clear its PFAIL and
+FAIL right away.
+
+**Why:** Rediska has no replicas yet, so nothing can have taken over the
+failed node's slots: if it's back, its slots are back. Redis is stricter,
+because a replica may have been promoted in the meantime. This changes
+with failover.
+
+### A failed node's slots get CLUSTERDOWN
+
+**Choice:** keys in a slot whose owner is FAIL get `CLUSTERDOWN Hash slot
+not served`. Only FAIL counts; PFAIL doesn't change routing.
+
+**Why:** a `MOVED` to a dead node would only send the client somewhere it
+will time out. This matches the earlier choice for unowned slots: only the
+slots that are down fail, and every other slot keeps working.
 
 ## Tests start real processes
 

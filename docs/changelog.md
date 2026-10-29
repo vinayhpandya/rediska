@@ -2,6 +2,79 @@
 
 How Rediska was built, one milestone at a time (newest first).
 
+## Milestone 18
+
+Failure detection: nodes agree when one has failed (Phase 4d)
+
+1. New `--cluster-node-timeout` flag, in milliseconds (default 15000, as in
+   Redis). `scripts/cluster.sh` uses 3000, set with `NODE_TIMEOUT`
+2. A node that hasn't answered for longer than the timeout is **PFAIL**:
+   one node's suspicion, shown as `master,fail?` in `CLUSTER NODES`. The
+   clock also starts when a node can't be reached at all, so a node that
+   dies is noticed even with no PING outstanding
+3. Every PING and PONG gossips about the nodes the sender suspects, and
+   each of those counts as a failure report. Reports older than twice the
+   timeout are dropped
+4. When a node suspects another itself and, counting itself, a majority of
+   masters agree, it marks the node **FAIL** (`master,fail`) and broadcasts
+   a new `FAIL` message, so every node marks it at once
+5. Keys in a failed node's slots get `CLUSTERDOWN Hash slot not served`
+   instead of a `MOVED` to a dead node. Other slots keep working
+6. `CLUSTER INFO` reports `cluster_slots_pfail`, `cluster_slots_fail`, and
+   `cluster_state:fail` while a slot owner is FAIL
+7. When the failed node answers again, PFAIL and FAIL are cleared
+8. Fixed the `--cluster-node-timeout` help text in `rediska -h`
+
+Try it:
+
+    ./scripts/cluster.sh start
+    lsof -ti :7003 | xargs kill            # stop node3
+    sleep 5
+    redis-cli -p 7001 cluster nodes        # node3: master,fail
+    redis-cli -p 7001 cluster info         # cluster_state:fail
+    ./scripts/cluster.sh start             # restart node3; fail clears
+    ./scripts/cluster.sh stop
+
+TODO
+
+1. No failover: a failed node's slots stay down until it comes back
+   (replicas, Phases 6 and 7)
+2. Each node PINGs every other node every second. Redis PINGs about one
+   random node a second, plus any it hasn't heard from in half the timeout,
+   which scales better
+3. Tests for failure detection
+
+## Milestone 17
+
+Gossip and `CLUSTER MEET`: nodes find each other (Phase 4b)
+
+1. Bus messages carry the sender's own slots and a gossip section: a few
+   random other nodes it knows (a tenth of them, at least 3), with their
+   flags and ping/pong times
+2. `CLUSTER MEET ip port` introduces a node. The two do a handshake (a
+   `MEET`, answered by a `PONG` on a connection we opened), and from there
+   gossip tells every other node about it within a second or two
+3. Only a `MEET` adds a node we don't know; a node gossip mentions gets a
+   handshake first. A node is trusted only once it answers on a connection
+   we opened to it. A node that never answers is forgotten after 10 seconds
+4. Each node announces its own slots in every message, and the others
+   route by what it announces. If two nodes claim a slot, the first owner
+   keeps it until slots carry config epochs
+5. `CLUSTER NODES` lists nodes learned by gossip, with `handshake` until
+   they answer
+
+Try it:
+
+    ./scripts/cluster.sh start
+    redis-cli -p 7001 cluster nodes        # all three, connected
+
+TODO
+
+1. What nodes learn isn't saved (`nodes.conf`): if every node restarts,
+   nodes added with `MEET` are gone
+2. Every layout line needs at least one slot, and all slots are usually
+   taken, so a new node can't join owning nothing yet
+
 ## Milestone 16
 
 Releases with GoReleaser and Homebrew

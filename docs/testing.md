@@ -19,7 +19,7 @@ go test ./commands/ -run TestCheckCluster -v
 
 | Package | Tests |
 |---|---|
-| `cluster` | key slots (through the examples), parsing `cluster.conf` (including 9 kinds of broken file), slot ownership |
+| `cluster` | key slots (through the examples), parsing `cluster.conf` (including 9 kinds of broken file), slot ownership, bus messages, gossip and handshakes, and real buses in one process that connect, reconnect and spread a `CLUSTER MEET` |
 | `commands` | routing (`MOVED`, `CROSSSLOT`, `CLUSTERDOWN`, hash tags), `CLUSTER` replies, AOF replay, out-of-memory, `PFADD` errors |
 | `server` | `MULTI`/`EXEC` in cluster mode, with the replies real Redis gives |
 | `store` | `PFADD` key counts and memory accounting |

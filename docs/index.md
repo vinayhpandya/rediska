@@ -25,7 +25,8 @@ $ redis-cli -p 7379 get name
 - **Memory limits**: `--maxmemory` with `noeviction`, approximate LRU or LFU
   eviction.
 - **Cluster mode**: 16384 hash slots, `MOVED` and `CROSSSLOT` redirects, and
-  the `CLUSTER` commands real cluster tools use.
+  the `CLUSTER` commands real cluster tools use. Nodes find each other by
+  gossip and `CLUSTER MEET`, and agree when one has failed.
   See [Cluster mode](cluster.md).
 - **Redis's threading model**: one goroutine per connection, but every
   command runs on a single dispatch worker, so data needs no locks.

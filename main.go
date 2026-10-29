@@ -80,7 +80,7 @@ func setUpFlags() {
 	flag.StringVar(&config.ClusterConfigFile, "cluster-config-file", "", "Cluster layout file (needed with --cluster-enabled)")
 	flag.StringVar(&pprofAddr, "pprof-addr", "", "If set, expose net/http/pprof on this address (e.g. localhost:6060). Disabled by default.")
 	flag.StringVar(&config.ClusterNodeName, "cluster-node-name", "", "This node's name in the cluster layout file (default: find it by --port)")
-	flag.IntVar(&config.ClusterNodeTimeout, "cluster-node-timeout", 15000, "...")
+	flag.IntVar(&config.ClusterNodeTimeout, "cluster-node-timeout", 15000, "Milliseconds without an answer before a node is suspected to have failed")
 	flag.BoolVar(&showVersion, "version", false, "Print the version and exit")
 	flag.Parse()
 }
