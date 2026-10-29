@@ -857,6 +857,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#milestone-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestone-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 17
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#milestone-16" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1095,6 +1117,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#milestone-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 18
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestone-17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 17
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#milestone-16" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1320,6 +1364,75 @@
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <p>How Rediska was built, one milestone at a time (newest first).</p>
+<h2 id="milestone-18">Milestone 18<a class="headerlink" href="#milestone-18" title="Permanent link">&para;</a></h2>
+<p>Failure detection: nodes agree when one has failed (Phase 4d)</p>
+<ol>
+<li>New <code>--cluster-node-timeout</code> flag, in milliseconds (default 15000, as in
+   Redis). <code>scripts/cluster.sh</code> uses 3000, set with <code>NODE_TIMEOUT</code></li>
+<li>A node that hasn't answered for longer than the timeout is <strong>PFAIL</strong>:
+   one node's suspicion, shown as <code>master,fail?</code> in <code>CLUSTER NODES</code>. The
+   clock also starts when a node can't be reached at all, so a node that
+   dies is noticed even with no PING outstanding</li>
+<li>Every PING and PONG gossips about the nodes the sender suspects, and
+   each of those counts as a failure report. Reports older than twice the
+   timeout are dropped</li>
+<li>When a node suspects another itself and, counting itself, a majority of
+   masters agree, it marks the node <strong>FAIL</strong> (<code>master,fail</code>) and broadcasts
+   a new <code>FAIL</code> message, so every node marks it at once</li>
+<li>Keys in a failed node's slots get <code>CLUSTERDOWN Hash slot not served</code>
+   instead of a <code>MOVED</code> to a dead node. Other slots keep working</li>
+<li><code>CLUSTER INFO</code> reports <code>cluster_slots_pfail</code>, <code>cluster_slots_fail</code>, and
+   <code>cluster_state:fail</code> while a slot owner is FAIL</li>
+<li>When the failed node answers again, PFAIL and FAIL are cleared</li>
+<li>Fixed the <code>--cluster-node-timeout</code> help text in <code>rediska -h</code></li>
+</ol>
+<p>Try it:</p>
+<div class="highlight"><pre><span></span><code>./scripts/cluster.sh start
+lsof -ti :7003 | xargs kill            # stop node3
+sleep 5
+redis-cli -p 7001 cluster nodes        # node3: master,fail
+redis-cli -p 7001 cluster info         # cluster_state:fail
+./scripts/cluster.sh start             # restart node3; fail clears
+./scripts/cluster.sh stop
+</code></pre></div>
+<p>TODO</p>
+<ol>
+<li>No failover: a failed node's slots stay down until it comes back
+   (replicas, Phases 6 and 7)</li>
+<li>Each node PINGs every other node every second. Redis PINGs about one
+   random node a second, plus any it hasn't heard from in half the timeout,
+   which scales better</li>
+<li>Tests for failure detection</li>
+</ol>
+<h2 id="milestone-17">Milestone 17<a class="headerlink" href="#milestone-17" title="Permanent link">&para;</a></h2>
+<p>Gossip and <code>CLUSTER MEET</code>: nodes find each other (Phase 4b)</p>
+<ol>
+<li>Bus messages carry the sender's own slots and a gossip section: a few
+   random other nodes it knows (a tenth of them, at least 3), with their
+   flags and ping/pong times</li>
+<li><code>CLUSTER MEET ip port</code> introduces a node. The two do a handshake (a
+   <code>MEET</code>, answered by a <code>PONG</code> on a connection we opened), and from there
+   gossip tells every other node about it within a second or two</li>
+<li>Only a <code>MEET</code> adds a node we don't know; a node gossip mentions gets a
+   handshake first. A node is trusted only once it answers on a connection
+   we opened to it. A node that never answers is forgotten after 10 seconds</li>
+<li>Each node announces its own slots in every message, and the others
+   route by what it announces. If two nodes claim a slot, the first owner
+   keeps it until slots carry config epochs</li>
+<li><code>CLUSTER NODES</code> lists nodes learned by gossip, with <code>handshake</code> until
+   they answer</li>
+</ol>
+<p>Try it:</p>
+<div class="highlight"><pre><span></span><code>./scripts/cluster.sh start
+redis-cli -p 7001 cluster nodes        # all three, connected
+</code></pre></div>
+<p>TODO</p>
+<ol>
+<li>What nodes learn isn't saved (<code>nodes.conf</code>): if every node restarts,
+   nodes added with <code>MEET</code> are gone</li>
+<li>Every layout line needs at least one slot, and all slots are usually
+   taken, so a new node can't join owning nothing yet</li>
+</ol>
 <h2 id="milestone-16">Milestone 16<a class="headerlink" href="#milestone-16" title="Permanent link">&para;</a></h2>
 <p>Releases with GoReleaser and Homebrew</p>
 <ol>

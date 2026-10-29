@@ -977,7 +977,8 @@ so <code>redis-cli</code>, <code>redis-benchmark</code> and Redis client librari
 <li><strong>Memory limits</strong>: <code>--maxmemory</code> with <code>noeviction</code>, approximate LRU or LFU
   eviction.</li>
 <li><strong>Cluster mode</strong>: 16384 hash slots, <code>MOVED</code> and <code>CROSSSLOT</code> redirects, and
-  the <code>CLUSTER</code> commands real cluster tools use.
+  the <code>CLUSTER</code> commands real cluster tools use. Nodes find each other by
+  gossip and <code>CLUSTER MEET</code>, and agree when one has failed.
   See <a href="cluster/">Cluster mode</a>.</li>
 <li><strong>Redis's threading model</strong>: one goroutine per connection, but every
   command runs on a single dispatch worker, so data needs no locks.
