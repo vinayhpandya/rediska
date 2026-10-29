@@ -37,6 +37,8 @@ const (
 	// FlagHandshake: we've heard of this node but it hasn't answered us
 	// yet, so we can't vouch for it. Gossip about it is ignored.
 	FlagHandshake NodeFlags = 1 << iota
+	FlagPFail               // "I suspect it"        → fail? in CLUSTER NODES
+	FlagFail                // "a majority agreed"   → fail
 )
 
 // Message is one message on the cluster bus.
@@ -108,7 +110,7 @@ func decodeMessage(v any) (Message, error) {
 	if m.Type, err = wantString(arr[0], "type"); err != nil {
 		return Message{}, err
 	}
-	if m.Type != "PING" && m.Type != "PONG" && m.Type != "MEET" {
+	if m.Type != "PING" && m.Type != "PONG" && m.Type != "MEET" && m.Type != "FAIL" {
 		return Message{}, fmt.Errorf("cluster bus: unknown message type %q", m.Type)
 	}
 	if m.ID, err = wantString(arr[1], "id"); err != nil {

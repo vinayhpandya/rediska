@@ -31,6 +31,7 @@ import (
 	"os/signal"
 	"runtime/debug"
 	"syscall"
+	"time"
 
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/config"
@@ -79,6 +80,7 @@ func setUpFlags() {
 	flag.StringVar(&config.ClusterConfigFile, "cluster-config-file", "", "Cluster layout file (needed with --cluster-enabled)")
 	flag.StringVar(&pprofAddr, "pprof-addr", "", "If set, expose net/http/pprof on this address (e.g. localhost:6060). Disabled by default.")
 	flag.StringVar(&config.ClusterNodeName, "cluster-node-name", "", "This node's name in the cluster layout file (default: find it by --port)")
+	flag.IntVar(&config.ClusterNodeTimeout, "cluster-node-timeout", 15000, "...")
 	flag.BoolVar(&showVersion, "version", false, "Print the version and exit")
 	flag.Parse()
 }
@@ -93,11 +95,15 @@ func main() {
 		if config.ClusterConfigFile == "" {
 			log.Fatal("--cluster-enabled needs --cluster-config-file")
 		}
+		if config.ClusterNodeTimeout <= 0 {
+			log.Fatal("--cluster-node-timeout must be more than 0")
+		}
 		layout, err := cluster.LoadLayout(config.ClusterConfigFile, config.Port, config.ClusterNodeName)
 		if err != nil {
 			log.Fatal(err)
 		}
 		cluster.Current = layout
+		cluster.NodeTimeout = time.Duration(config.ClusterNodeTimeout) * time.Millisecond
 		store.Default.EnableSlotIndex()
 		log.Printf("cluster: I am %s (%s), owning slots %v", layout.Self.Name, layout.Self.Addr, layout.Self.Slots)
 	}

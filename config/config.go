@@ -40,4 +40,7 @@ var (
 	// ClusterNodeName is this node's name in the layout file
 	// (--cluster-node-name). If empty, the node finds itself by its port.
 	ClusterNodeName string
+	// ClusterNodeTimeout is the time after which nodes mark a particular
+	// as unreachable, this is required for PFAIL and FAIL
+	ClusterNodeTimeout int // ms, --cluster-node-timeout, default 15000
 )

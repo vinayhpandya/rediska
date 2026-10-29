@@ -41,6 +41,11 @@ const (
 // cluster.conf are never forgotten. A variable so tests can shorten it.
 var handshakeTimeout = 10 * time.Second
 
+// NodeTimeout is how long another node can stay silent before we suspect
+// it has failed (PFAIL). main sets it from --cluster-node-timeout; the
+// default is Redis's. NewBus copies it into Bus.NodeTimeout.
+var NodeTimeout = 15 * time.Second
+
 // BusPort is the bus port for a client port: 7002 -> 17002.
 func BusPort(port int) int { return port + BusPortOffset }
 
@@ -72,16 +77,28 @@ type Peer struct {
 
 	created  time.Time // when we added it, for handshakeTimeout
 	fromConf bool      // listed in cluster.conf: never forgotten
+
+	flags       NodeFlags // FlagPFail or FlagFail: what we think of its health
+	failReports map[string]time.Time
 }
 
 // Connected reports whether we currently have a connection to the peer.
 func (p *Peer) Connected() bool { return p.link != nil }
 
+// PFail reports whether we suspect the peer has failed: it hasn't answered
+// us for longer than the node timeout. Only our opinion.
+func (p *Peer) PFail() bool { return p.flags&FlagPFail != 0 }
+
+// Failed reports whether the peer is marked FAIL: a majority of masters
+// agreed it has failed.
+func (p *Peer) Failed() bool { return p.flags&FlagFail != 0 }
+
 // Bus is this node's cluster bus.
 type Bus struct {
-	layout   *Layout
-	peers    map[string]*Peer // the other nodes, by node ID
-	listener net.Listener
+	layout      *Layout
+	peers       map[string]*Peer // the other nodes, by node ID
+	listener    net.Listener
+	NodeTimeout time.Duration
 
 	ctx     context.Context
 	send    func(Event)     // hands an event to dispatchWorker
@@ -109,9 +126,10 @@ var CurrentBus *Bus
 // connects yet.
 func NewBus(l *Layout) *Bus {
 	b := &Bus{
-		layout:  l,
-		peers:   map[string]*Peer{},
-		dialReq: make(chan dialTarget, 64),
+		layout:      l,
+		peers:       map[string]*Peer{},
+		NodeTimeout: NodeTimeout,
+		dialReq:     make(chan dialTarget, 64),
 	}
 	now := time.Now()
 	for _, n := range l.Nodes {
@@ -295,6 +313,7 @@ func (b *Bus) tick() {
 			b.dropPeer(p) // deleting from a map while ranging over it is fine in Go
 			continue
 		}
+		b.checkTimeout(p, now)
 		if p.link == nil {
 			if !p.connecting && now.Sub(p.lastDial) >= retryInterval {
 				select {
@@ -344,6 +363,8 @@ func (b *Bus) handle(m Message, l *link) {
 		l.send(b.msg("PONG", m.ID)) // answer on the connection it came in on
 	case "PONG":
 		b.pong(m, l)
+	case "FAIL":
+		b.failFrom(m)
 	}
 	b.learnFrom(m) // its slots and gossip (gossip.go)
 }
@@ -369,6 +390,7 @@ func (b *Bus) pong(m Message, l *link) {
 	}
 	p.PongRecv = time.Now()
 	p.PingSent = time.Time{}
+	b.clearFailure(p) // it answered, so it's alive (failure.go)
 	if p.Handshake {
 		p.Handshake = false // it answered: it's real
 		log.Printf("cluster bus: handshake with %s (%s) done", p.Node.Name, p.Node.Addr)
@@ -409,6 +431,7 @@ func (b *Bus) linkUp(id string, l *link) {
 func (b *Bus) dialFailed(id string) {
 	if p := b.peers[id]; p != nil {
 		p.connecting = false
+		startWaiting(p, time.Now())
 	}
 }
 
@@ -426,5 +449,6 @@ func (b *Bus) linkDown(id string, l *link) {
 	if p != nil {
 		log.Printf("cluster bus: lost connection to %s", p.Node.Name)
 		p.link = nil
+		startWaiting(p, time.Now())
 	}
 }
