@@ -35,12 +35,20 @@ const (
 
 type testCluster struct {
 	addrs []string // "127.0.0.1:<port>" for node1..node3
+
+	// What startNode needs to start (or restart) a node.
+	bin, conf, dir string
+	ports          []int
+	extra          []string    // extra flags for every node
+	procs          []*exec.Cmd // the running process per node; nil when stopped
 }
 
 // startCluster builds rediska, writes a cluster.conf with 3 nodes on free
 // ports, starts one process per node and waits until each answers PING.
 // Everything is stopped and deleted when the test ends, pass or fail.
-func startCluster(t *testing.T) *testCluster {
+//
+// extra flags are passed to every node, e.g. "--cluster-node-timeout", "1000".
+func startCluster(t *testing.T, extra ...string) *testCluster {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("end-to-end test: skipped with -short")
@@ -55,8 +63,10 @@ func startCluster(t *testing.T) *testCluster {
 	}
 
 	// 2. Pick 3 free ports and write the layout.
-	c := &testCluster{}
+	c := &testCluster{bin: bin, dir: dir, extra: extra}
 	ports := freePorts(t, 3)
+	c.ports = ports
+	c.procs = make([]*exec.Cmd, len(ports))
 	ranges := []string{"0-5460", "5461-10922", "10923-16383"}
 	var conf strings.Builder
 	for i, p := range ports {
@@ -64,51 +74,14 @@ func startCluster(t *testing.T) *testCluster {
 		c.addrs = append(c.addrs, addr)
 		fmt.Fprintf(&conf, "node%d %s %s\n", i+1, addr, ranges[i])
 	}
-	confPath := filepath.Join(dir, "cluster.conf")
-	if err := os.WriteFile(confPath, []byte(conf.String()), 0o644); err != nil {
+	c.conf = filepath.Join(dir, "cluster.conf")
+	if err := os.WriteFile(c.conf, []byte(conf.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// 3. Start one process per node.
-	for i, p := range ports {
-		logf, err := os.Create(filepath.Join(dir, fmt.Sprintf("node%d.log", i+1)))
-		if err != nil {
-			t.Fatal(err)
-		}
-		cmd := exec.Command(bin, "--port", strconv.Itoa(p),
-			"--cluster-enabled", "--cluster-config-file", confPath)
-		cmd.Stdout, cmd.Stderr = logf, logf
-		if err := cmd.Start(); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			cmd.Process.Signal(syscall.SIGTERM) // rediska shuts down cleanly on SIGTERM
-			done := make(chan struct{})
-			go func() { cmd.Wait(); close(done) }()
-			select {
-			case <-done:
-			case <-time.After(3 * time.Second):
-				cmd.Process.Kill()
-			}
-			logf.Close()
-		})
-	}
-
-	// 4. Wait until every node answers PING.
-	for i, addr := range c.addrs {
-		deadline := time.Now().Add(5 * time.Second)
-		for {
-			conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
-			if err == nil {
-				conn.Close()
-				break
-			}
-			if time.Now().After(deadline) {
-				log, _ := os.ReadFile(filepath.Join(dir, fmt.Sprintf("node%d.log", i+1)))
-				t.Fatalf("node%d (%s) did not start:\n%s", i+1, addr, log)
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
+	// 3. Start one process per node, and 4. wait until each answers.
+	for i := range ports {
+		c.startNode(t, i)
 	}
 
 	// 5. Wait until every node knows who owns every slot. Each node learns
@@ -125,6 +98,67 @@ func startCluster(t *testing.T) *testCluster {
 		}
 	}
 	return c
+}
+
+// startNode starts node i's process and waits until it accepts
+// connections. The process is stopped when the test ends.
+func (c *testCluster) startNode(t *testing.T, i int) {
+	t.Helper()
+	logf, err := os.OpenFile(filepath.Join(c.dir, fmt.Sprintf("node%d.log", i+1)),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644) // append: a restart keeps the old log
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := append([]string{"--port", strconv.Itoa(c.ports[i]),
+		"--cluster-enabled", "--cluster-config-file", c.conf}, c.extra...)
+	cmd := exec.Command(c.bin, args...)
+	cmd.Stdout, cmd.Stderr = logf, logf
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	c.procs[i] = cmd
+	t.Cleanup(func() {
+		if c.procs[i] == cmd { // not already stopped by killNode
+			cmd.Process.Signal(syscall.SIGTERM) // rediska shuts down cleanly on SIGTERM
+			done := make(chan struct{})
+			go func() { cmd.Wait(); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				cmd.Process.Kill()
+			}
+		}
+		logf.Close()
+	})
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		conn, err := net.DialTimeout("tcp", c.addrs[i], 200*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("node%d (%s) did not start:\n%s", i+1, c.addrs[i], c.log(i))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// killNode stops node i the hard way (SIGKILL), like a crash: no clean
+// shutdown, connections just drop.
+func (c *testCluster) killNode(t *testing.T, i int) {
+	t.Helper()
+	cmd := c.procs[i]
+	c.procs[i] = nil
+	cmd.Process.Kill()
+	cmd.Wait()
+}
+
+// log returns node i's log so far, for failure messages.
+func (c *testCluster) log(i int) string {
+	b, _ := os.ReadFile(filepath.Join(c.dir, fmt.Sprintf("node%d.log", i+1)))
+	return string(b)
 }
 
 // freePorts finds n unused client ports whose cluster bus ports (client
