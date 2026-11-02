@@ -51,25 +51,42 @@ func SetAOF(a *core.AOF) {
 	store.Default.TrackDeletes(a != nil)
 }
 
+// While DispatchBatch runs a MULTI/EXEC, AOF entries are collected in
+// txEntries instead of being written one at a time, and written together
+// at the end (see writeAOF and DispatchBatch).
+var (
+	inTx      bool
+	txEntries [][]string
+)
+
 // logToAOF writes what cmd changed to the AOF, in the order it happened:
-//  1. a DEL for every key removed while it ran (DEL itself, lazy expiry,
-//     active expiry, or eviction). Without these, a restart brings the
-//     keys back.
+//
+//  1. a DEL for every key removed while it ran, whatever removed it: DEL
+//     itself, lazy expiry in a read, active expiry (_EXPIRY), or eviction
+//     before a write. Without these, a restart brings the keys back.
 //  2. the command itself, if it's a write that succeeded, rewritten by
 //     aofForm so that replaying it later has the same effect.
 func logToAOF(cmd *Command, reply []byte) {
 	for _, key := range store.Default.TakeDeleted() {
-		if err := aof.Write([]string{"DEL", key}); err != nil {
-			fmt.Printf("AOF write error: %v\n", err)
-		}
+		writeAOF([]string{"DEL", key})
 	}
 	if !writeCommands[cmd.Name] || isErrorReply(reply) {
 		return
 	}
 	if args := aofForm(cmd); args != nil {
-		if err := aof.Write(args); err != nil {
-			fmt.Printf("AOF write error: %v\n", err)
-		}
+		writeAOF(args)
+	}
+}
+
+// writeAOF writes one entry to the AOF, or, inside a MULTI/EXEC, keeps it
+// for DispatchBatch to write with the rest of the transaction.
+func writeAOF(args []string) {
+	if inTx {
+		txEntries = append(txEntries, args)
+		return
+	}
+	if err := aof.Write(args); err != nil {
+		fmt.Printf("AOF write error: %v\n", err)
 	}
 }
 
@@ -180,14 +197,26 @@ func Replay(cmd *Command) {
 // slot owned by this node. If they aren't, DispatchBatch returns that
 // single error (CROSSSLOT, CLUSTERDOWN or MOVED) and runs nothing, so a
 // transaction never runs halfway.
+//
+// With an AOF, the transaction's entries are written as one block,
+// wrapped in MULTI and EXEC, so the file has all of it or none of it.
 func DispatchBatch(cmd []*Command) []byte {
 	if errReply := checkClusterBatch(cmd); errReply != nil {
 		return errReply // the whole transaction is refused; nothing ran
 	}
+	inTx, txEntries = true, nil
 	replies := make([][]byte, len(cmd))
 	for i, c := range cmd {
 		replies[i] = Dispatch(c)
 	}
+	inTx = false
+	// A transaction that changed nothing writes nothing.
+	if aof != nil && len(txEntries) > 0 {
+		if err := aof.WriteTransaction(txEntries); err != nil {
+			fmt.Printf("AOF write error: %v\n", err)
+		}
+	}
+	txEntries = nil
 	return core.EncodeRawArray(replies)
 }
 
