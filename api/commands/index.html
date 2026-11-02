@@ -1268,10 +1268,6 @@
 <h2 id="func-dispatch">func Dispatch<a class="headerlink" href="#func-dispatch" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">Dispatch</span><span class="p">(</span><span class="nx">cmd</span><span class="w"> </span><span class="o">*</span><span class="nx">Command</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span>
 </code></pre></div>
-<p>Dispatch runs one command and returns its encoded RESP reply.</p>
-<p>It replies with an error, without running anything, if the command is unknown or, in cluster mode, if its keys span several slots (CROSSSLOT), belong to no node (CLUSTERDOWN) or belong to another node (MOVED).</p>
-<p>For commands that can grow memory, and only when --maxmemory is set, it then evicts keys according to the policy, and replies with an OOM error without running the command if memory is still over the limit.</p>
-<p>Otherwise it runs the handler, and appends successful write commands to the AOF if one is set (see SetAOF).</p>
 <p>Dispatch must only be called from the dispatch worker goroutine.</p>
 <p><a name="DispatchBatch"></a></p>
 <h2 id="func-dispatchbatch">func DispatchBatch<a class="headerlink" href="#func-dispatchbatch" title="Permanent link">&para;</a></h2>
@@ -1283,7 +1279,7 @@
 <h2 id="func-dispatchpipeline">func DispatchPipeline<a class="headerlink" href="#func-dispatchpipeline" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">DispatchPipeline</span><span class="p">(</span><span class="nx">cmds</span><span class="w"> </span><span class="p">[]</span><span class="o">*</span><span class="nx">Command</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span>
 </code></pre></div>
-<p>DispatchPipeline runs each command in order and returns their replies concatenated back-to-back -- exactly as if each had been dispatched and written individually, one at a time. Unlike DispatchBatch (used for MULTI/EXEC, which needs one array-wrapped reply representing the whole transaction), pipelined commands each need their own independent, individually-parseable reply, so no outer array framing is added here.</p>
+<p>DispatchPipeline runs each command in order and returns their replies concatenated back-to-back, exactly as if each had been dispatched and written individually.</p>
 <p><a name="IsKnownCommand"></a></p>
 <h2 id="func-isknowncommand">func IsKnownCommand<a class="headerlink" href="#func-isknowncommand" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">IsKnownCommand</span><span class="p">(</span><span class="nx">name</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
