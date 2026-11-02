@@ -48,6 +48,8 @@ func (a *AOF) Recover(fn func(args []string)) error {
 	}
 
 	reader := bufio.NewReader(a.file)
+	var interval bool      // Between Multi and exec
+	var pending [][]string //transaction commands
 	for {
 		value, err := Decode(reader)
 		if err != nil {
@@ -67,9 +69,41 @@ func (a *AOF) Recover(fn func(args []string)) error {
 			}
 			args[i] = s
 		}
-		fn(args)
+		switch {
+		case len(args) == 1 && args[0] == "MULTI":
+			interval, pending = true, nil
+		case len(args) == 1 && args[0] == "EXEC" && interval:
+			for _, c := range pending {
+				fn(c)
+			}
+			interval, pending = false, nil
+		case interval:
+			pending = append(pending, args)
+		default:
+			fn(args)
+		}
 	}
 	return nil
+}
+
+// WriteTransaction appends the commands of one MULTI/EXEC as a single
+// block, wrapped in MULTI and EXEC, with one write to the file:
+//
+//	MULTI
+//	SET a 1
+//	SET b 2
+//	EXEC
+//
+// Recover replays a block only if its EXEC made it into the file, so a
+// crash in the middle of writing it can't leave half a transaction.
+func (a *AOF) WriteTransaction(cmds [][]string) error {
+	buf := EncodeArray([]string{"MULTI"})
+	for _, c := range cmds {
+		buf = append(buf, EncodeArray(c)...)
+	}
+	buf = append(buf, EncodeArray([]string{"EXEC"})...)
+	_, err := a.file.Write(buf)
+	return err
 }
 
 // Close closes the file. Call Sync first to make sure everything written
