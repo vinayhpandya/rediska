@@ -942,6 +942,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-store-expire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) Expire
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-expireat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) ExpireAt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-expiresat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) ExpiresAt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-store-get" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1074,6 +1107,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-store-setat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) SetAt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-store-setpolicy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1089,6 +1133,28 @@
     <span class="md-ellipsis">
       
         func (*Store) TTL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-takedeleted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) TakeDeleted
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-trackdeletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) TrackDeletes
       
     </span>
   </a>
@@ -1353,6 +1419,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-store-expire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) Expire
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-expireat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) ExpireAt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-expiresat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) ExpiresAt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-store-get" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1485,6 +1584,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-store-setat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) SetAt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-store-setpolicy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1500,6 +1610,28 @@
     <span class="md-ellipsis">
       
         func (*Store) TTL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-takedeleted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) TakeDeleted
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-store-trackdeletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Store) TrackDeletes
       
     </span>
   </a>
@@ -1564,6 +1696,9 @@
 <li><a href="#Store.Delete">func (s *Store) Delete(keys ...string) int64</a></li>
 <li><a href="#Store.DeleteExpired">func (s *Store) DeleteExpired() int</a></li>
 <li><a href="#Store.EnableSlotIndex">func (s *Store) EnableSlotIndex()</a></li>
+<li><a href="#Store.Expire">func (s *Store) Expire(key string, ttl time.Duration) bool</a></li>
+<li><a href="#Store.ExpireAt">func (s *Store) ExpireAt(key string, at time.Time) bool</a></li>
+<li><a href="#Store.ExpiresAt">func (s *Store) ExpiresAt(key string) (time.Time, bool)</a></li>
 <li><a href="#Store.Get">func (s *Store) Get(key string) (string, bool)</a></li>
 <li><a href="#Store.GetEncoding">func (s *Store) GetEncoding(key string) (Encoding, bool)</a></li>
 <li><a href="#Store.GetFreq">func (s *Store) GetFreq(key string) (freq uint8, ok bool, policyOK bool)</a></li>
@@ -1576,8 +1711,11 @@
 <li><a href="#Store.PFMerge">func (s *Store) PFMerge(dest string, sources ...string) error</a></li>
 <li><a href="#Store.PerformEvictions">func (s *Store) PerformEvictions(samples int, maxBytes int64)</a></li>
 <li><a href="#Store.Set">func (s *Store) Set(key, value string, ttl time.Duration)</a></li>
+<li><a href="#Store.SetAt">func (s *Store) SetAt(key, value string, expiresAt time.Time)</a></li>
 <li><a href="#Store.SetPolicy">func (s *Store) SetPolicy(policy string)</a></li>
 <li><a href="#Store.TTL">func (s *Store) TTL(key string) int64</a></li>
+<li><a href="#Store.TakeDeleted">func (s *Store) TakeDeleted() []string</a></li>
+<li><a href="#Store.TrackDeletes">func (s *Store) TrackDeletes(on bool)</a></li>
 <li><a href="#Store.UsedMemory">func (s *Store) UsedMemory() int64</a></li>
 </ul>
 <h2 id="constants">Constants<a class="headerlink" href="#constants" title="Permanent link">&para;</a></h2>
@@ -1683,80 +1821,110 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">EnableSlotIndex</span><span class="p">()</span>
 </code></pre></div>
 <p>EnableSlotIndex turns the index on. Called once at startup in cluster mode.</p>
+<p><a name="Store.Expire"></a></p>
+<h3 id="func-store-expire">func (*Store) Expire<a class="headerlink" href="#func-store-expire" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">Expire</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">ttl</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
+</code></pre></div>
+<p>Expire sets key to expire ttl from now. See ExpireAt.</p>
+<p><a name="Store.ExpireAt"></a></p>
+<h3 id="func-store-expireat">func (*Store) ExpireAt<a class="headerlink" href="#func-store-expireat" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">ExpireAt</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">at</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
+</code></pre></div>
+<p>ExpireAt sets key's expiry to the absolute time at, keeping its value (of any type, HyperLogLogs included). A time that has already passed deletes the key. It reports false if the key doesn't exist.</p>
+<p><a name="Store.ExpiresAt"></a></p>
+<h3 id="func-store-expiresat">func (*Store) ExpiresAt<a class="headerlink" href="#func-store-expiresat" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">ExpiresAt</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+</code></pre></div>
+<p>ExpiresAt returns key's absolute expiry time (zero if it has none), and whether the key exists. It doesn't count as an access and doesn't expire the key. The AOF uses it to record the deadline a command set.</p>
 <p><a name="Store.Get"></a></p>
 <h3 id="func-store-get">func (*Store) Get<a class="headerlink" href="#func-store-get" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">Get</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">Get</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
 </code></pre></div>
 <p>Get returns key's value as a string, and whether the key exists. An expired key is removed and reported as missing. It counts as an access for LRU/LFU. A key holding a HyperLogLog is also reported as missing, whereas real Redis would return its raw bytes.</p>
 <p><a name="Store.GetEncoding"></a></p>
 <h3 id="func-store-getencoding">func (*Store) GetEncoding<a class="headerlink" href="#func-store-getencoding" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">GetEncoding</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Encoding</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">GetEncoding</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Encoding</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
 </code></pre></div>
 <p>GetEncoding is a metadata read (used by OBJECT ENCODING) and deliberately does NOT bump recency — inspecting a key shouldn't make it look hot.</p>
 <p><a name="Store.GetFreq"></a></p>
 <h3 id="func-store-getfreq">func (*Store) GetFreq<a class="headerlink" href="#func-store-getfreq" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">GetFreq</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">freq</span><span class="w"> </span><span class="kt">uint8</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">policyOK</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">GetFreq</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">freq</span><span class="w"> </span><span class="kt">uint8</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">policyOK</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
 </code></pre></div>
 <p>GetFreq returns a key's LFU counter (used by OBJECT FREQ), same as real Redis. It's a metadata read and does NOT bump recency. ok is false if the key doesn't exist, and policyOK is false if the active policy isn't an LFU policy -- callers should surface that as a distinct error, mirroring Redis's "An LFU maxmemory policy is not selected" response.</p>
 <p><a name="Store.GetInt"></a></p>
 <h3 id="func-store-getint">func (*Store) GetInt<a class="headerlink" href="#func-store-getint" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">GetInt</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">int64</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">,</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">GetInt</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">int64</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">,</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span>
 </code></pre></div>
 <p>GetInt returns key's value as an integer, for commands like INCR. The results are the value, whether the key exists, an error if it exists but doesn't hold an integer, and the key's expiry time (zero if none). It counts as an access for LRU/LFU.</p>
 <p><a name="Store.KeyCount"></a></p>
 <h3 id="func-store-keycount">func (*Store) KeyCount<a class="headerlink" href="#func-store-keycount" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">KeyCount</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">KeyCount</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
 </code></pre></div>
 <p>KeyCount returns the number of keys currently in the store, including any that are logically expired but not yet removed.</p>
 <p><a name="Store.KeysInSlot"></a></p>
 <h3 id="func-store-keysinslot">func (*Store) KeysInSlot<a class="headerlink" href="#func-store-keysinslot" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">KeysInSlot</span><span class="p">(</span><span class="nx">slot</span><span class="p">,</span><span class="w"> </span><span class="nx">count</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">KeysInSlot</span><span class="p">(</span><span class="nx">slot</span><span class="p">,</span><span class="w"> </span><span class="nx">count</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
 </code></pre></div>
 <p>KeysInSlot returns up to count keys from slot, in no particular order.</p>
 <p><a name="Store.OverMemory"></a></p>
 <h3 id="func-store-overmemory">func (*Store) OverMemory<a class="headerlink" href="#func-store-overmemory" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">OverMemory</span><span class="p">(</span><span class="nx">maxBytes</span><span class="w"> </span><span class="kt">int64</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">OverMemory</span><span class="p">(</span><span class="nx">maxBytes</span><span class="w"> </span><span class="kt">int64</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>OverMemory reports whether the store is above the byte limit.</p>
 <p><a name="Store.PFAdd"></a></p>
 <h3 id="func-store-pfadd">func (*Store) PFAdd<a class="headerlink" href="#func-store-pfadd" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PFAdd</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">values</span><span class="w"> </span><span class="p">...</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">changed</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PFAdd</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">values</span><span class="w"> </span><span class="p">...</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">changed</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <p>PFAdd adds values to the HyperLogLog at key, creating it if needed. It reports whether anything changed: creating the key counts as a change, even with no values, as in Redis. If key holds some other kind of value, PFAdd changes nothing and returns ErrNotHLL.</p>
 <p><a name="Store.PFCount"></a></p>
 <h3 id="func-store-pfcount">func (*Store) PFCount<a class="headerlink" href="#func-store-pfcount" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PFCount</span><span class="p">(</span><span class="nx">keys</span><span class="w"> </span><span class="p">...</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">int64</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PFCount</span><span class="p">(</span><span class="nx">keys</span><span class="w"> </span><span class="p">...</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">int64</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <p>PFCount returns the estimated number of distinct values in the HyperLogLogs at keys. With one key, that's its own count; with several, it's the count of their union, computed in a temporary sketch without storing anything, as in Redis. Missing or expired keys count as empty. If any key holds some other kind of value, it returns ErrNotHLL.</p>
 <p><a name="Store.PFMerge"></a></p>
 <h3 id="func-store-pfmerge">func (*Store) PFMerge<a class="headerlink" href="#func-store-pfmerge" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PFMerge</span><span class="p">(</span><span class="nx">dest</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">sources</span><span class="w"> </span><span class="p">...</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PFMerge</span><span class="p">(</span><span class="nx">dest</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">sources</span><span class="w"> </span><span class="p">...</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
 </code></pre></div>
 <p>PFMerge stores in dest the union of the HyperLogLogs at dest and every source key. Missing or expired keys count as empty. If dest already exists it keeps its expiry, as in Redis.</p>
 <p>Every key is checked before anything changes: if any of them holds some other kind of value, PFMerge returns ErrNotHLL and changes nothing.</p>
 <p><a name="Store.PerformEvictions"></a></p>
 <h3 id="func-store-performevictions">func (*Store) PerformEvictions<a class="headerlink" href="#func-store-performevictions" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PerformEvictions</span><span class="p">(</span><span class="nx">samples</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">maxBytes</span><span class="w"> </span><span class="kt">int64</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">PerformEvictions</span><span class="p">(</span><span class="nx">samples</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">maxBytes</span><span class="w"> </span><span class="kt">int64</span><span class="p">)</span>
 </code></pre></div>
 <p>PerformEvictions frees keys until the store is back under maxBytes. It runs only inside the single command worker, so it needs no locks.</p>
 <p><a name="Store.Set"></a></p>
 <h3 id="func-store-set">func (*Store) Set<a class="headerlink" href="#func-store-set" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">Set</span><span class="p">(</span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">value</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">ttl</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">Set</span><span class="p">(</span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">value</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">ttl</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">)</span>
 </code></pre></div>
-<p>Set stores value under key, replacing any old value and its expiry. If ttl is greater than zero the key expires after ttl; otherwise it never expires. The value is stored as an integer if it parses as one, and as a string otherwise.</p>
+<p>Set stores value under key, replacing any old value and its expiry. If ttl is greater than zero the key expires after ttl; otherwise it never expires.</p>
+<p><a name="Store.SetAt"></a></p>
+<h3 id="func-store-setat">func (*Store) SetAt<a class="headerlink" href="#func-store-setat" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">SetAt</span><span class="p">(</span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">value</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">expiresAt</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span>
+</code></pre></div>
+<p>SetAt is Set with an absolute expiry time instead of a TTL. A zero expiresAt means the key never expires. A time that has already passed deletes the key, as SET ... PXAT does in Redis.</p>
 <p><a name="Store.SetPolicy"></a></p>
 <h3 id="func-store-setpolicy">func (*Store) SetPolicy<a class="headerlink" href="#func-store-setpolicy" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">SetPolicy</span><span class="p">(</span><span class="nx">policy</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">SetPolicy</span><span class="p">(</span><span class="nx">policy</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span>
 </code></pre></div>
 <p>SetPolicy sets the maxmemory policy, which decides how keys are evicted and whether keys track recency (LRU) or frequency (LFU). It is called once at startup.</p>
 <p><a name="Store.TTL"></a></p>
 <h3 id="func-store-ttl">func (*Store) TTL<a class="headerlink" href="#func-store-ttl" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">TTL</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">int64</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">TTL</span><span class="p">(</span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">int64</span>
 </code></pre></div>
 <p>TTL is a metadata read and does NOT bump recency, matching Redis.</p>
+<p><a name="Store.TakeDeleted"></a></p>
+<h3 id="func-store-takedeleted">func (*Store) TakeDeleted<a class="headerlink" href="#func-store-takedeleted" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">TakeDeleted</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+</code></pre></div>
+<p>TakeDeleted returns the keys removed since the last call, in the order they were removed, and forgets them.</p>
+<p><a name="Store.TrackDeletes"></a></p>
+<h3 id="func-store-trackdeletes">func (*Store) TrackDeletes<a class="headerlink" href="#func-store-trackdeletes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">TrackDeletes</span><span class="p">(</span><span class="nx">on</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+</code></pre></div>
+<p>TrackDeletes turns deletion tracking on or off. While it's on, every key removed (by DEL, lazy or active expiry, or eviction) is remembered until TakeDeleted collects it.</p>
 <p><a name="Store.UsedMemory"></a></p>
 <h3 id="func-store-usedmemory">func (*Store) UsedMemory<a class="headerlink" href="#func-store-usedmemory" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">UsedMemory</span><span class="p">()</span><span class="w"> </span><span class="kt">int64</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">Store</span><span class="p">)</span><span class="w"> </span><span class="nx">UsedMemory</span><span class="p">()</span><span class="w"> </span><span class="kt">int64</span>
 </code></pre></div>
 <p>UsedMemory returns the store's estimate of the memory its keys and values use, in bytes. It is what --maxmemory is compared against.</p>
 <p>Generated by <a href="https://github.com/princjef/gomarkdoc">gomarkdoc</a></p>
