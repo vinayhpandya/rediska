@@ -35,12 +35,14 @@ type entry struct {
 // Store is not thread-safe.
 // All access must go through the single command worker in server.go.
 type Store struct {
-	data       map[string]entry
-	now        func() time.Time    // injectable for testing e.g. fake clock
-	usedMemory int64               // running byte estimate, kept in sync by Set/removeKey
-	evPool     []evictionCandidate // eviction pool, persists across cycles
-	policy     string              // active maxmemory-policy; see SetPolicy
-	slots      *slotIndex
+	data         map[string]entry
+	now          func() time.Time    // injectable for testing e.g. fake clock
+	usedMemory   int64               // running byte estimate, kept in sync by Set/removeKey
+	evPool       []evictionCandidate // eviction pool, persists across cycles
+	policy       string              // active maxmemory-policy; see SetPolicy
+	slots        *slotIndex
+	trackDeletes bool // track keys which will be deleted
+	deleted      []string
 }
 
 // New returns an empty Store using the noeviction policy.
@@ -136,19 +138,29 @@ func (s *Store) GetFreq(key string) (freq uint8, ok bool, policyOK bool) {
 
 // Set stores value under key, replacing any old value and its expiry. If
 // ttl is greater than zero the key expires after ttl; otherwise it never
-// expires. The value is stored as an integer if it parses as one, and as a
-// string otherwise.
+// expires.
 func (s *Store) Set(key, value string, ttl time.Duration) {
+	var expiresAt time.Time
+	if ttl > 0 {
+		expiresAt = s.now().Add(ttl)
+	}
+	s.SetAt(key, value, expiresAt)
+}
+
+// SetAt is Set with an absolute expiry time instead of a TTL. A zero
+// expiresAt means the key never expires. A time that has already passed
+// deletes the key, as SET ... PXAT does in Redis.
+func (s *Store) SetAt(key, value string, expiresAt time.Time) {
+	if !expiresAt.IsZero() && !s.now().Before(expiresAt) {
+		s.removeKey(key)
+		return
+	}
 	old, exists := s.data[key]
 	if !exists {
 		s.keyAdded(key)
 	} else {
 		// overwriting: drop the old size before adding the new one
 		s.usedMemory -= entrySize(key, old)
-	}
-	var expiresAt time.Time
-	if ttl > 0 {
-		expiresAt = s.now().Add(ttl)
 	}
 	enc := detectEncoding(value)
 	e := entry{
@@ -268,6 +280,36 @@ func (s *Store) Get(key string) (string, bool) {
 		return "", false
 	}
 	return "", false
+}
+
+// ExpireAt sets key's expiry to the absolute time at, keeping its value
+// (of any type, HyperLogLogs included). A time that has already passed
+// deletes the key. It reports false if the key doesn't exist.
+func (s *Store) ExpireAt(key string, at time.Time) bool {
+	e, ok := s.lookup(key)
+	if !ok {
+		return false
+	}
+	if !s.now().Before(at) {
+		s.removeKey(key)
+		return true
+	}
+	e.expiresAt = at
+	s.data[key] = e
+	return true
+}
+
+// Expire sets key to expire ttl from now. See ExpireAt.
+func (s *Store) Expire(key string, ttl time.Duration) bool {
+	return s.ExpireAt(key, s.now().Add(ttl))
+}
+
+// ExpiresAt returns key's absolute expiry time (zero if it has none), and
+// whether the key exists. It doesn't count as an access and doesn't
+// expire the key. The AOF uses it to record the deadline a command set.
+func (s *Store) ExpiresAt(key string) (time.Time, bool) {
+	e, ok := s.data[key]
+	return e.expiresAt, ok
 }
 
 // TTL is a metadata read and does NOT bump recency, matching Redis.

@@ -66,6 +66,25 @@ func (s *Store) removeKey(key string) {
 	delete(s.data, key)
 	s.indexRemove(key)
 	UpdateDbStat(0, "keys", -1)
+	if s.trackDeletes {
+		s.deleted = append(s.deleted, key)
+	}
+}
+
+// TrackDeletes turns deletion tracking on or off. While it's on, every
+// key removed (by DEL, lazy or active expiry, or eviction) is remembered
+// until TakeDeleted collects it.
+func (s *Store) TrackDeletes(on bool) {
+	s.trackDeletes = on
+	s.deleted = nil
+}
+
+// TakeDeleted returns the keys removed since the last call, in the order
+// they were removed, and forgets them.
+func (s *Store) TakeDeleted() []string {
+	d := s.deleted
+	s.deleted = nil
+	return d
 }
 
 // OverMemory reports whether the store is above the byte limit.
