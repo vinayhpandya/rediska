@@ -1275,6 +1275,7 @@
 </code></pre></div>
 <p>DispatchBatch runs the commands queued by MULTI when the client sends EXEC, and returns their replies wrapped in one RESP array.</p>
 <p>In cluster mode, all keys of all the commands together must be in one slot owned by this node. If they aren't, DispatchBatch returns that single error (CROSSSLOT, CLUSTERDOWN or MOVED) and runs nothing, so a transaction never runs halfway.</p>
+<p>With an AOF, the transaction's entries are written as one block, wrapped in MULTI and EXEC, so the file has all of it or none of it.</p>
 <p><a name="DispatchPipeline"></a></p>
 <h2 id="func-dispatchpipeline">func DispatchPipeline<a class="headerlink" href="#func-dispatchpipeline" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">DispatchPipeline</span><span class="p">(</span><span class="nx">cmds</span><span class="w"> </span><span class="p">[]</span><span class="o">*</span><span class="nx">Command</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span>
