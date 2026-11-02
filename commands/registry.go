@@ -11,6 +11,7 @@ package commands
 
 import (
 	"fmt"
+
 	"github.com/vinayhpandya/rediska/config"
 	"github.com/vinayhpandya/rediska/core"
 	"github.com/vinayhpandya/rediska/store"
@@ -25,13 +26,13 @@ var commands = make(map[string]HandlerFunc)
 var aof *core.AOF
 
 var writeCommands = map[string]bool{
-	"SET":     true,
-	"EXPIRE":  true,
-	"INCR":    true,
-	"APPEND":  true,
-	"PFADD":   true,
-	"PFMERGE": true,
-	"DEL":     true,
+	"SET":       true,
+	"EXPIRE":    true,
+	"PEXPIREAT": true,
+	"INCR":      true,
+	"APPEND":    true,
+	"PFADD":     true,
+	"PFMERGE":   true,
 }
 
 var denyOOMCommands = map[string]bool{
@@ -47,6 +48,56 @@ var denyOOMCommands = map[string]bool{
 // replayed command would be written to the file a second time.
 func SetAOF(a *core.AOF) {
 	aof = a
+	store.Default.TrackDeletes(a != nil)
+}
+
+// logToAOF writes what cmd changed to the AOF, in the order it happened:
+//  1. a DEL for every key removed while it ran (DEL itself, lazy expiry,
+//     active expiry, or eviction). Without these, a restart brings the
+//     keys back.
+//  2. the command itself, if it's a write that succeeded, rewritten by
+//     aofForm so that replaying it later has the same effect.
+func logToAOF(cmd *Command, reply []byte) {
+	for _, key := range store.Default.TakeDeleted() {
+		if err := aof.Write([]string{"DEL", key}); err != nil {
+			fmt.Printf("AOF write error: %v\n", err)
+		}
+	}
+	if !writeCommands[cmd.Name] || isErrorReply(reply) {
+		return
+	}
+	if args := aofForm(cmd); args != nil {
+		if err := aof.Write(args); err != nil {
+			fmt.Printf("AOF write error: %v\n", err)
+		}
+	}
+}
+
+// aofForm returns what the AOF should record for a successful write.
+// Expiry is recorded as an absolute time, because a TTL means "from now",
+// and "now" is a different time when the file is replayed:
+//
+//	SET k v EX 10  →  SET k v PXAT <unix ms>
+//	EXPIRE k 60    →  PEXPIREAT k <unix ms>
+//
+// It returns nil if the command removed the key instead (an expiry time
+// already in the past): its DEL has been logged already.
+func aofForm(cmd *Command) []string {
+	switch {
+	case cmd.Name == "SET" && len(cmd.Args) == 4,
+		cmd.Name == "EXPIRE" && len(cmd.Args) == 2:
+		key := cmd.Args[0]
+		at, ok := store.Default.ExpiresAt(key)
+		if !ok {
+			return nil
+		}
+		ms := fmt.Sprint(at.UnixMilli())
+		if cmd.Name == "SET" {
+			return []string{"SET", key, cmd.Args[1], "PXAT", ms}
+		}
+		return []string{"PEXPIREAT", key, ms}
+	}
+	return append([]string{cmd.Name}, cmd.Args...)
 }
 
 // Register adds a command. name must be upper case, since Dispatch looks
@@ -75,21 +126,19 @@ func isErrorReply(reply []byte) bool {
 	return len(reply) > 0 && reply[0] == '-'
 }
 
-// Dispatch runs one command and returns its encoded RESP reply.
-//
-// It replies with an error, without running anything, if the command is
-// unknown or, in cluster mode, if its keys span several slots (CROSSSLOT),
-// belong to no node (CLUSTERDOWN) or belong to another node (MOVED).
-//
-// For commands that can grow memory, and only when --maxmemory is set, it
-// then evicts keys according to the policy, and replies with an OOM error
-// without running the command if memory is still over the limit.
-//
-// Otherwise it runs the handler, and appends successful write commands to
-// the AOF if one is set (see SetAOF).
-//
 // Dispatch must only be called from the dispatch worker goroutine.
 func Dispatch(cmd *Command) []byte {
+	reply := run(cmd)
+	if aof != nil {
+		// Even when cmd was refused (OOM), eviction may have removed keys
+		// first; logToAOF writes their DELs.
+		logToAOF(cmd, reply)
+	}
+	return reply
+}
+
+// run is Dispatch without the AOF: the checks, then the handler.
+func run(cmd *Command) []byte {
 	handler, ok := commands[cmd.Name]
 	if !ok {
 		return core.EncodeError(fmt.Sprintf("ERR unknown command '%s'", cmd.Name))
@@ -110,15 +159,7 @@ func Dispatch(cmd *Command) []byte {
 			return core.EncodeError("OOM command not allowed when used memory > 'maxmemory'.")
 		}
 	}
-	reply := handler(cmd.Args)
-	if aof != nil && writeCommands[cmd.Name] && !isErrorReply(reply) {
-		fullCmd := append([]string{cmd.Name}, cmd.Args...)
-		if err := aof.Write(fullCmd); err != nil {
-			fmt.Printf("AOF write error: %v\n", err)
-		}
-	}
-	return reply
-
+	return handler(cmd.Args)
 }
 
 // Replay runs a command read back from the AOF at startup. Unlike
@@ -151,11 +192,8 @@ func DispatchBatch(cmd []*Command) []byte {
 }
 
 // DispatchPipeline runs each command in order and returns their replies
-// concatenated back-to-back -- exactly as if each had been dispatched and
-// written individually, one at a time. Unlike DispatchBatch (used for
-// MULTI/EXEC, which needs one array-wrapped reply representing the whole
-// transaction), pipelined commands each need their own independent,
-// individually-parseable reply, so no outer array framing is added here.
+// concatenated back-to-back, exactly as if each had been dispatched and
+// written individually.
 func DispatchPipeline(cmds []*Command) []byte {
 	var out []byte
 	for _, c := range cmds {
