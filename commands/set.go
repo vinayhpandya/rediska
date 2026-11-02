@@ -25,7 +25,7 @@ func handleSet(args []string) []byte {
 
 	if len(args) == 4 {
 		option := strings.ToUpper(args[2])
-		n, err := strconv.Atoi(args[3])
+		n, err := strconv.ParseInt(args[3], 10, 64)
 		if err != nil || n <= 0 {
 			return core.EncodeError("ERR invalid expire time in 'set' command")
 		}
@@ -35,6 +35,9 @@ func handleSet(args []string) []byte {
 			ttl = time.Duration(n) * time.Second
 		case "PX":
 			ttl = time.Duration(n) * time.Millisecond
+		case "PXAT": // absolute Unix time in ms; what the AOF records
+			store.Default.SetAt(key, value, time.UnixMilli(n))
+			return core.EncodeSimpleString("OK")
 		default:
 			return core.EncodeError("ERR syntax error")
 		}
