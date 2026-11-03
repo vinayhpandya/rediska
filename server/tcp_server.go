@@ -23,18 +23,24 @@ import (
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/commands"
 	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/replication"
+	"github.com/vinayhpandya/rediska/store"
 )
 
 // CommandRequest is one unit of work sent from a connection to the
 // dispatch worker. Exactly one of its three forms is used: a single
 // command, a MULTI/EXEC batch, or a pipeline. The worker sends the encoded
 // reply back on its reply channel.
+//
+// Two other kinds of work use the same channel, so they run in order with
+// commands: busEvent (the cluster bus) and task (replication).
 type CommandRequest struct {
 	cmd      commands.Command
 	batch    []*commands.Command // MULTI/EXEC: dispatched as one array-wrapped reply
 	pipeline []*commands.Command // pipelined commands: dispatched as concatenated individual replies
 	replych  chan []byte
 	busEvent *cluster.Event
+	task     func() // run on the worker; no reply
 }
 
 // replyChPool reuses reply channels across commands instead of allocating a
@@ -71,6 +77,22 @@ func replayAOFCommand(args []string) {
 // error only if startup fails (opening or replaying the AOF, or listening).
 func Run(ctx context.Context, host string, port int, appendOnly bool, appendFilename string) error {
 	addr := fmt.Sprintf("%s:%d", host, port)
+
+	// A replica gets a full copy of its master's data every time it starts,
+	// so it doesn't use an AOF: anything in it would be thrown away.
+	masterAddr := ""
+	if l := cluster.Current; l != nil && l.Self.IsReplica() {
+		for _, n := range l.Nodes {
+			if n.ID == l.Self.MasterID {
+				masterAddr = n.Addr
+			}
+		}
+		if appendOnly {
+			log.Println("replica: not using the append-only file; the master's data is copied at every start")
+			appendOnly = false
+		}
+	}
+
 	var aof *core.AOF
 	fmt.Println("Append file name is ", appendFilename)
 	if appendOnly {
@@ -124,9 +146,28 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 		close(workerdone)
 	}()
 
+	// runOnWorker runs f on the dispatch worker and waits for it to finish.
+	// It returns false, without running f, if the server is shutting down.
+	runOnWorker := func(f func()) bool {
+		done := make(chan struct{})
+		select {
+		case commandCh <- CommandRequest{task: func() { f(); close(done) }}:
+		case <-ctx.Done():
+			return false
+		}
+		<-done
+		return true
+	}
+
 	var producers sync.WaitGroup
-	producers.Add(1)
-	go startActiveExpiry(ctx, commandCh, &producers)
+	if masterAddr == "" {
+		// A replica doesn't expire keys itself: its master decides, and
+		// sends the DELs. Otherwise the two copies could drift apart.
+		producers.Add(1)
+		go startActiveExpiry(ctx, commandCh, &producers)
+	} else {
+		startReplica(ctx, masterAddr, commandCh, &producers)
+	}
 	if bus != nil {
 		cluster.CurrentBus = bus // so CLUSTER NODES can read it
 		bus.Start(ctx, func(e cluster.Event) {
@@ -156,7 +197,7 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 		producers.Add(1)
 		go func(c net.Conn) {
 			defer producers.Done()
-			handleConnection(ctx, c, commandCh)
+			handleConnection(ctx, c, commandCh, runOnWorker)
 		}(conn)
 		// go handleConnection(conn, commandCh)
 	}
@@ -178,6 +219,43 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 	log.Println("shutdown complete")
 	return nil
 
+}
+
+// startReplica keeps this node, a replica, in sync with the master at
+// masterAddr (see replication.Link). What the master sends is applied on
+// the dispatch worker with commands.Replay: without the cluster check,
+// which would answer MOVED (a replica owns no slots), and without the
+// memory check, since the master already decided.
+func startReplica(ctx context.Context, masterAddr string, commandCh chan<- CommandRequest, wg *sync.WaitGroup) {
+	link := replication.NewLink(masterAddr)
+	replication.Upstream = link // set before anything reads it
+
+	// submit queues f for the worker without waiting for it: commands from
+	// the master are applied in the order they're queued.
+	submit := func(f func()) bool {
+		select {
+		case commandCh <- CommandRequest{task: f}:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+	flush := func() bool {
+		return submit(func() { store.Default.Flush() })
+	}
+	apply := func(cmds [][]string) bool {
+		return submit(func() {
+			for _, c := range cmds {
+				commands.Replay(&commands.Command{Name: c[0], Args: c[1:]})
+			}
+		})
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		link.Run(ctx, flush, apply)
+	}()
 }
 
 func startActiveExpiry(ctx context.Context, commandCh chan<- CommandRequest, wg *sync.WaitGroup) {
@@ -220,6 +298,10 @@ func dispatchWorker(commandCh <-chan CommandRequest) {
 			cluster.CurrentBus.Handle(*req.busEvent)
 			continue
 		}
+		if req.task != nil {
+			req.task()
+			continue
+		}
 		var reply []byte
 		switch {
 		case req.batch != nil:
@@ -232,7 +314,7 @@ func dispatchWorker(commandCh <-chan CommandRequest) {
 		req.replych <- reply
 	}
 }
-func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- CommandRequest) {
+func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- CommandRequest, runOnWorker func(func()) bool) {
 	defer conn.Close()
 	log.Printf("client connected: %s", conn.RemoteAddr())
 	reader := bufio.NewReader(conn)
@@ -324,6 +406,26 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 			}
 			continue
 		}
+		// SYNC means this connection is a replica: hand it over to
+		// replication for good. (Not inside MULTI, where it's queued and
+		// rejected like any other unknown command.)
+		if command.Name == "SYNC" && !tx.isMulti {
+			if msg := syncRefusal(); msg != "" {
+				if _, err := writer.Write(core.EncodeError(msg)); err != nil {
+					return
+				}
+				if err := writer.Flush(); err != nil {
+					return
+				}
+				continue
+			}
+			if err := writer.Flush(); err != nil {
+				return
+			}
+			replication.Default.Serve(ctx, conn, runOnWorker)
+			return
+		}
+
 		action, txReply, batch := tx.handle(command)
 
 		if action != actionPassthrough {
@@ -410,4 +512,17 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 			}
 		}
 	}
+}
+
+// syncRefusal returns why this node can't serve a replica, or "" if it can.
+// Replicas copy data slot by slot, which needs cluster mode, and only a
+// master has data of its own to copy.
+func syncRefusal() string {
+	switch l := cluster.Current; {
+	case l == nil:
+		return "ERR SYNC needs cluster mode"
+	case l.Self.IsReplica():
+		return "ERR this node is a replica; SYNC with its master instead"
+	}
+	return ""
 }

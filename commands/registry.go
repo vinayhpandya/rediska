@@ -12,8 +12,10 @@ package commands
 import (
 	"fmt"
 
+	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/config"
 	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/replication"
 	"github.com/vinayhpandya/rediska/store"
 )
 
@@ -33,6 +35,8 @@ var writeCommands = map[string]bool{
 	"APPEND":    true,
 	"PFADD":     true,
 	"PFMERGE":   true,
+
+	"_HLLRESTORE": true,
 }
 
 var denyOOMCommands = map[string]bool{
@@ -48,49 +52,84 @@ var denyOOMCommands = map[string]bool{
 // replayed command would be written to the file a second time.
 func SetAOF(a *core.AOF) {
 	aof = a
-	store.Default.TrackDeletes(a != nil)
+	updateTracking()
 }
 
-// While DispatchBatch runs a MULTI/EXEC, AOF entries are collected in
+func init() {
+	replication.Default.OnChange = updateTracking
+}
+
+// recording reports whether anyone needs to hear about changes: the AOF,
+// or replicas.
+func recording() bool {
+	return aof != nil || replication.Default.Count() > 0
+}
+
+// updateTracking turns deletion tracking on while changes are recorded,
+// so that keys removed by expiry or eviction reach the AOF and replicas
+// too. It's called when the AOF is set and when replicas come and go.
+func updateTracking() {
+	store.Default.TrackDeletes(recording())
+}
+
+// While DispatchBatch runs a MULTI/EXEC, its entries are collected in
 // txEntries instead of being written one at a time, and written together
-// at the end (see writeAOF and DispatchBatch).
+// at the end (see writeEntry and DispatchBatch).
 var (
 	inTx      bool
 	txEntries [][]string
 )
 
-// logToAOF writes what cmd changed to the AOF, in the order it happened:
+// logChange records what cmd changed, in the order it happened, for the
+// AOF and for replicas:
 //
 //  1. a DEL for every key removed while it ran, whatever removed it: DEL
 //     itself, lazy expiry in a read, active expiry (_EXPIRY), or eviction
 //     before a write. Without these, a restart brings the keys back.
 //  2. the command itself, if it's a write that succeeded, rewritten by
 //     aofForm so that replaying it later has the same effect.
-func logToAOF(cmd *Command, reply []byte) {
+func logChange(cmd *Command, reply []byte) {
 	for _, key := range store.Default.TakeDeleted() {
-		writeAOF([]string{"DEL", key})
+		writeEntry([]string{"DEL", key})
 	}
 	if !writeCommands[cmd.Name] || isErrorReply(reply) {
 		return
 	}
 	if args := aofForm(cmd); args != nil {
-		writeAOF(args)
+		writeEntry(args)
 	}
 }
 
-// writeAOF writes one entry to the AOF, or, inside a MULTI/EXEC, keeps it
-// for DispatchBatch to write with the rest of the transaction.
-func writeAOF(args []string) {
+// writeEntry writes one entry to the AOF and sends it to replicas, or,
+// inside a MULTI/EXEC, keeps it for DispatchBatch to handle with the rest
+// of the transaction.
+func writeEntry(args []string) {
 	if inTx {
 		txEntries = append(txEntries, args)
 		return
 	}
-	if err := aof.Write(args); err != nil {
-		fmt.Printf("AOF write error: %v\n", err)
+	if aof != nil {
+		if err := aof.Write(args); err != nil {
+			fmt.Printf("AOF write error: %v\n", err)
+		}
+	}
+	if replication.Default.Count() > 0 {
+		replication.Default.Feed(replication.Entry{Slot: entrySlot(args), Args: args})
 	}
 }
 
-// aofForm returns what the AOF should record for a successful write.
+// entrySlot is the slot of an entry's keys. Every entry has keys, and in
+// cluster mode they're all in one slot, so the first key decides.
+func entrySlot(args []string) int {
+	keys, _ := KeysOf(&Command{Name: args[0], Args: args[1:]})
+	if len(keys) == 0 {
+		return -1 // not expected; sent to every replica
+	}
+	return cluster.KeyHashSlot(keys[0])
+}
+
+// aofForm returns what the AOF and replicas should get for a successful
+// write.
 // Expiry is recorded as an absolute time, because a TTL means "from now",
 // and "now" is a different time when the file is replayed:
 //
@@ -146,10 +185,10 @@ func isErrorReply(reply []byte) bool {
 // Dispatch must only be called from the dispatch worker goroutine.
 func Dispatch(cmd *Command) []byte {
 	reply := run(cmd)
-	if aof != nil {
+	if recording() {
 		// Even when cmd was refused (OOM), eviction may have removed keys
-		// first; logToAOF writes their DELs.
-		logToAOF(cmd, reply)
+		// first; logChange records their DELs.
+		logChange(cmd, reply)
 	}
 	return reply
 }
@@ -210,10 +249,21 @@ func DispatchBatch(cmd []*Command) []byte {
 		replies[i] = Dispatch(c)
 	}
 	inTx = false
-	// A transaction that changed nothing writes nothing.
-	if aof != nil && len(txEntries) > 0 {
-		if err := aof.WriteTransaction(txEntries); err != nil {
-			fmt.Printf("AOF write error: %v\n", err)
+	// The whole transaction is written and sent at once, so the AOF and
+	// replicas get all of it or none of it. One that changed nothing
+	// writes nothing.
+	if len(txEntries) > 0 {
+		if aof != nil {
+			if err := aof.WriteTransaction(txEntries); err != nil {
+				fmt.Printf("AOF write error: %v\n", err)
+			}
+		}
+		if replication.Default.Count() > 0 {
+			entries := make([]replication.Entry, len(txEntries))
+			for i, args := range txEntries {
+				entries[i] = replication.Entry{Slot: entrySlot(args), Args: args}
+			}
+			replication.Default.FeedTransaction(entries)
 		}
 	}
 	txEntries = nil

@@ -9,7 +9,8 @@ Every node starts from a layout file. After that, nodes talk over the
 [cluster bus](#the-cluster-bus): they learn each other's slots, add nodes
 with [`CLUSTER MEET`](#adding-a-node-with-cluster-meet), and
 [agree when a node has failed](#failure-detection). Slots can't move while
-running yet, and there are no replicas or failover. See
+running yet, and [replicas](#replicas) keep a copy of their master's
+data but there's no failover yet. See
 [Limitations](#limitations).
 
 ## Slots
@@ -114,7 +115,48 @@ node6  127.0.0.1:7006  replicaof node3
 - Only masters count toward the majority in
   [failure detection](#failure-detection).
 
-For now a replica is only a role: it doesn't copy its master's data yet.
+#### How a replica copies its master's data
+
+When a replica starts, it connects to its master's client port and sends
+`SYNC`. The master then sends it, over that one connection:
+
+1. **a snapshot**: every key, as the command that recreates it
+   (`SET key value PXAT <ms>`, or an internal `_HLLRESTORE` for a
+   HyperLogLog), and
+2. **every change since**: the same entries the AOF records, including a
+   `DEL` for every key that expires or is evicted, and MULTI/EXEC blocks
+   that the replica applies all at once.
+
+The snapshot is copied **a few slots at a time**, between client commands,
+so clients never wait for the whole dataset: each step copies whole slots
+until it has about 1,000 keys or 1 MB, and copying 300,000 keys takes
+about 290 steps of 2 ms each. While the copy runs, a change is sent to the
+replica only if its slot has already been copied; a change to a slot that
+hasn't been copied yet is skipped, because that slot is copied later with
+the change already in it. This works because every command's keys are in
+one slot.
+
+Check a replica with:
+
+```console
+$ redis-cli -p 7004 info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:7001
+master_link_status:up
+$ redis-cli -p 7001 debug digest      # a fingerprint of all the data...
+$ redis-cli -p 7004 debug digest      # ...the same on master and replica
+```
+
+A replica:
+
+- **doesn't expire or evict keys** itself: its master decides, and sends
+  the `DEL`s, so the two copies can't drift apart.
+- **doesn't use an AOF**, even with `--appendOnly`: it gets a full copy
+  every time it starts or reconnects.
+- still answers clients with `MOVED`: reading from replicas isn't
+  supported yet.
 
 ### The cluster script
 
@@ -422,7 +464,14 @@ never dropped, even if the layout file changed while it was down.
 - **No slot migration**: slots can't move between running nodes, and if
   two nodes claim the same slot, the first owner keeps it (no config
   epochs yet).
-- **No replicas or failover**: a FAIL node's slots get `CLUSTERDOWN` until
-  it comes back.
+- **No failover**: a FAIL master's slots get `CLUSTERDOWN` until it comes
+  back, even though its replica has the data.
+- **Every reconnect is a full copy**: a replica that loses its connection,
+  even briefly, copies everything again.
+- **A slot is copied in one step**: if very many keys share a hash tag,
+  copying that one slot holds up clients for longer.
+- **A replica that falls far behind is disconnected**: if 4096 changes or
+  64 MB are waiting to be sent to it, the master drops it, and it
+  reconnects and copies everything again.
 - **Every node PINGs every node once a second**: fine for a few nodes;
   Redis's schedule (about one random node a second) scales better.
