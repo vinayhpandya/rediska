@@ -890,6 +890,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-layout-forgetothersroles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Layout) ForgetOthersRoles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-layout-forgetothersslots" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -957,6 +968,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="type Node">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#func-node-isreplica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Node) IsReplica
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1558,6 +1586,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-layout-forgetothersroles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Layout) ForgetOthersRoles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-layout-forgetothersslots" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1625,6 +1664,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="type Node">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#func-node-isreplica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Node) IsReplica
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1750,12 +1806,14 @@
 <li><a href="#ParseLayout">func ParseLayout(r io.Reader, myPort int) (*Layout, error)</a></li>
 <li><a href="#ParseLayoutAs">func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error)</a></li>
 <li><a href="#Layout.AddNode">func (l *Layout) AddNode(n *Node)</a></li>
+<li><a href="#Layout.ForgetOthersRoles">func (l *Layout) ForgetOthersRoles()</a></li>
 <li><a href="#Layout.ForgetOthersSlots">func (l *Layout) ForgetOthersSlots()</a></li>
 <li><a href="#Layout.Owner">func (l *Layout) Owner(slot int) *Node</a></li>
 <li><a href="#Layout.RemoveNode">func (l *Layout) RemoveNode(n *Node)</a></li>
 <li><a href="#Layout.SetSlots">func (l *Layout) SetSlots(n *Node, announced []SlotRange) (refused []SlotRange)</a></li>
 <li><a href="#Message">type Message</a></li>
 <li><a href="#Node">type Node</a></li>
+<li><a href="#Node.IsReplica">func (n *Node) IsReplica() bool</a></li>
 <li><a href="#NodeFlags">type NodeFlags</a></li>
 <li><a href="#Peer">type Peer</a></li>
 <li><a href="#Peer.Connected">func (p *Peer) Connected() bool</a></li>
@@ -1987,7 +2045,8 @@ A layout lists every node and the slots it owns. The node finds itself by its po
 <div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">ParseLayoutAs</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">myPort</span><span class="w"> </span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="nx">myName</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">Layout</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
 </code></pre></div>
 <p>ParseLayout parses a layout file. Each non-empty line is:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>&lt;name&gt; &lt;host:port&gt; &lt;slot or range&gt; [&lt;slot or range&gt; ...]
+<p>or a replica of the master called \&lt;master&gt;, which owns no slots:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>&lt;name&gt; &lt;host:port&gt; replicaof &lt;master&gt;
 </code></pre></div>
 <p>Anything after '#' is a comment. Any mistake is an error, because a node with a wrong layout would silently send clients to the wrong place.</p>
 <p><a name="Layout.AddNode"></a></p>
@@ -1995,100 +2054,133 @@ A layout lists every node and the slots it owns. The node finds itself by its po
 <div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">AddNode</span><span class="p">(</span><span class="nx">n</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span><span class="p">)</span>
 </code></pre></div>
 <p>AddNode adds a node learned while running. It owns no slots until it announces some (see SetSlots).</p>
+<p><a name="Layout.ForgetOthersRoles"></a></p>
+<h3 id="func-layout-forgetothersroles">func (*Layout) ForgetOthersRoles<a class="headerlink" href="#func-layout-forgetothersroles" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">ForgetOthersRoles</span><span class="p">()</span>
+</code></pre></div>
+<p>ForgetOthersRoles marks every node but Self as a master, for the same reason as ForgetOthersSlots: each node tells us its own role over the bus. cluster.conf only decides Self's role.</p>
 <p><a name="Layout.ForgetOthersSlots"></a></p>
 <h3 id="func-layout-forgetothersslots">func (*Layout) ForgetOthersSlots<a class="headerlink" href="#func-layout-forgetothersslots" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">ForgetOthersSlots</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">ForgetOthersSlots</span><span class="p">()</span>
 </code></pre></div>
 <p>ForgetOthersSlots keeps only Self's slots, and clears every other node's. The server calls it at startup in cluster mode, so that each node's slots come from that node itself, over the bus, instead of from our copy of the file. A node only ever speaks for its own slots.</p>
 <p><a name="Layout.Owner"></a></p>
 <h3 id="func-layout-owner">func (*Layout) Owner<a class="headerlink" href="#func-layout-owner" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">Owner</span><span class="p">(</span><span class="nx">slot</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">Owner</span><span class="p">(</span><span class="nx">slot</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span>
 </code></pre></div>
 <p>Owner returns the node that owns slot, or nil if nobody does.</p>
 <p><a name="Layout.RemoveNode"></a></p>
 <h3 id="func-layout-removenode">func (*Layout) RemoveNode<a class="headerlink" href="#func-layout-removenode" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">RemoveNode</span><span class="p">(</span><span class="nx">n</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">RemoveNode</span><span class="p">(</span><span class="nx">n</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span><span class="p">)</span>
 </code></pre></div>
 <p>RemoveNode forgets n, and frees the slots it owned.</p>
 <p><a name="Layout.SetSlots"></a></p>
 <h3 id="func-layout-setslots">func (*Layout) SetSlots<a class="headerlink" href="#func-layout-setslots" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">SetSlots</span><span class="p">(</span><span class="nx">n</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span><span class="p">,</span><span class="w"> </span><span class="nx">announced</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">refused</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Layout</span><span class="p">)</span><span class="w"> </span><span class="nx">SetSlots</span><span class="p">(</span><span class="nx">n</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span><span class="p">,</span><span class="w"> </span><span class="nx">announced</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">refused</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="p">)</span>
 </code></pre></div>
 <p>SetSlots records the slots that n says it owns. n gives its whole set each time, so slots it no longer lists are released.</p>
 <p>Until slots carry config epochs, the first owner wins: a slot that another node already owns stays with that node. SetSlots returns the slots it refused, so the caller can log them. n.Slots ends up as the slots n was actually given. Never call it for Self: a node's own slots change only through its own config.</p>
 <p><a name="Message"></a></p>
 <h2 id="type-message">type Message<a class="headerlink" href="#type-message" title="Permanent link">&para;</a></h2>
 <p>Message is one message on the cluster bus.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Message</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="w">    </span><span class="nx">Type</span><span class="w">   </span><span class="kt">string</span>
-<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="w">    </span><span class="nx">ID</span><span class="w">     </span><span class="kt">string</span>
-<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="w">    </span><span class="nx">Name</span><span class="w">   </span><span class="kt">string</span>
-<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">   </span><span class="kt">string</span>
-<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="w">    </span><span class="nx">Flags</span><span class="w">  </span><span class="nx">NodeFlags</span>
-<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="w">    </span><span class="nx">Slots</span><span class="w">  </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="w">   </span><span class="c1">// the sender's own slots</span>
-<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="w">    </span><span class="nx">Gossip</span><span class="w"> </span><span class="p">[]</span><span class="nx">GossipEntry</span><span class="w"> </span><span class="c1">// other nodes the sender knows about</span>
-<a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Message</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">    </span><span class="nx">Type</span><span class="w">   </span><span class="kt">string</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">    </span><span class="nx">ID</span><span class="w">     </span><span class="kt">string</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">    </span><span class="nx">Name</span><span class="w">   </span><span class="kt">string</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">   </span><span class="kt">string</span>
+<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="w">    </span><span class="nx">Flags</span><span class="w">  </span><span class="nx">NodeFlags</span>
+<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="w">    </span><span class="nx">Slots</span><span class="w">  </span><span class="p">[]</span><span class="nx">SlotRange</span><span class="w">   </span><span class="c1">// the sender's own slots</span>
+<a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a><span class="w">    </span><span class="nx">Gossip</span><span class="w"> </span><span class="p">[]</span><span class="nx">GossipEntry</span><span class="w"> </span><span class="c1">// other nodes the sender knows about</span>
+<a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a><span class="w">    </span><span class="nx">Master</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-37-10" name="__codelineno-37-10" href="#__codelineno-37-10"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Node"></a></p>
 <h2 id="type-node">type Node<a class="headerlink" href="#type-node" title="Permanent link">&para;</a></h2>
 <p>Node is one member of the cluster, as described by one line of the cluster layout file.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Node</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">  </span><span class="kt">string</span>
-<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="c1">// "host:port"</span>
-<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">    </span><span class="nx">Port</span><span class="w">  </span><span class="kt">int</span>
-<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">    </span><span class="nx">ID</span><span class="w">    </span><span class="kt">string</span><span class="w"> </span><span class="c1">// 40 hex chars, derived from Name so it's stable across restarts</span>
-<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="w">    </span><span class="nx">Slots</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span>
-<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Node</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="w">    </span><span class="nx">Name</span><span class="w">  </span><span class="kt">string</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">    </span><span class="nx">Addr</span><span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="c1">// "host:port"</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">    </span><span class="nx">Port</span><span class="w">  </span><span class="kt">int</span>
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="w">    </span><span class="nx">ID</span><span class="w">    </span><span class="kt">string</span><span class="w"> </span><span class="c1">// 40 hex chars, derived from Name so it's stable across restarts</span>
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="w">    </span><span class="nx">Slots</span><span class="w"> </span><span class="p">[]</span><span class="nx">SlotRange</span>
+<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="w">    </span><span class="c1">// MasterID is the ID of the master this node replicates, or "" if the</span>
+<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">    </span><span class="c1">// node is a master itself. A replica owns no slots: clients that send</span>
+<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="w">    </span><span class="c1">// it a key get MOVED to the slot's owner, which is its master.</span>
+<a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="w">    </span><span class="nx">MasterID</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a><span class="p">}</span>
 </code></pre></div>
+<p><a name="Node.IsReplica"></a></p>
+<h3 id="func-node-isreplica">func (*Node) IsReplica<a class="headerlink" href="#func-node-isreplica" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">n</span><span class="w"> </span><span class="o">*</span><span class="nx">Node</span><span class="p">)</span><span class="w"> </span><span class="nx">IsReplica</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+</code></pre></div>
+<p>IsReplica reports whether n replicates another node.</p>
 <p><a name="NodeFlags"></a></p>
 <h2 id="type-nodeflags">type NodeFlags<a class="headerlink" href="#type-nodeflags" title="Permanent link">&para;</a></h2>
-<p>NodeFlags is a set of node state bits carried on the bus.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">NodeFlags</span><span class="w"> </span><span class="kt">uint16</span>
+<p>A bus message is a RESP array of 8 items:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>1  type      bulk string   PING, PONG or MEET
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>2  id        bulk string   sender's node ID
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>3  name      bulk string   sender's name
+<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>4  addr      bulk string   sender's client address, "host:port"
+<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>5  flags     integer       sender's flags (see NodeFlags)
+<a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>6  slots     array         sender's OWN slots, as integers:
+<a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a>                           start1 end1 start2 end2 ...
+<a id="__codelineno-40-8" name="__codelineno-40-8" href="#__codelineno-40-8"></a>7  gossip    array         a few other nodes the sender knows, each an
+<a id="__codelineno-40-9" name="__codelineno-40-9" href="#__codelineno-40-9"></a>                           array of 6: id name addr flags ping-sent pong-recv
+<a id="__codelineno-40-10" name="__codelineno-40-10" href="#__codelineno-40-10"></a>8  master    bulk string   ID of the master the sender replicates, or
+<a id="__codelineno-40-11" name="__codelineno-40-11" href="#__codelineno-40-11"></a>                           empty if the sender is a master
+</code></pre></div>
+<p>MEET is a PING that also says "add me if you don't know me": it's the only message that makes a node take on a stranger (see gossip.go).</p>
+<p>Items 1-6 and 8 are the header: what the sender says about itself. A node only ever announces its own slots; gossip entries carry who exists, not who owns what. Ping-sent and pong-recv are the sender's view of that node, as Unix milliseconds (0 means none pending / never).</p>
+<p>A PING with no slots and no gossip, typed by hand:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>*8\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n$0\r\n\r\n
+</code></pre></div>
+<p>A node's role is part of the header, so like its slots, it's only ever announced by the node itself, never by gossip</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">NodeFlags</span><span class="w"> </span><span class="kt">uint16</span>
 </code></pre></div>
 <p><a name="FlagHandshake"></a></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="kd">const</span><span class="w"> </span><span class="p">(</span>
-<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="w">    </span><span class="c1">// FlagHandshake: we've heard of this node but it hasn't answered us</span>
-<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="w">    </span><span class="c1">// yet, so we can't vouch for it. Gossip about it is ignored.</span>
-<a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">    </span><span class="nx">FlagHandshake</span><span class="w"> </span><span class="nx">NodeFlags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="kc">iota</span>
-<a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="w">    </span><span class="nx">FlagPFail</span><span class="w">               </span><span class="c1">// "I suspect it"        → fail? in CLUSTER NODES</span>
-<a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a><span class="w">    </span><span class="nx">FlagFail</span><span class="w">                </span><span class="c1">// "a majority agreed"   → fail</span>
-<a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="kd">const</span><span class="w"> </span><span class="p">(</span>
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="w">    </span><span class="c1">// FlagHandshake: we've heard of this node but it hasn't answered us</span>
+<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="w">    </span><span class="c1">// yet, so we can't vouch for it. Gossip about it is ignored.</span>
+<a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="w">    </span><span class="nx">FlagHandshake</span><span class="w"> </span><span class="nx">NodeFlags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="kc">iota</span>
+<a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="w">    </span><span class="nx">FlagPFail</span><span class="w">               </span><span class="c1">// "I suspect it"        → fail? in CLUSTER NODES</span>
+<a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a><span class="w">    </span><span class="nx">FlagFail</span><span class="w">                </span><span class="c1">// "a majority agreed"   → fail</span>
+<a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="p">)</span>
 </code></pre></div>
 <p><a name="Peer"></a></p>
 <h2 id="type-peer">type Peer<a class="headerlink" href="#type-peer" title="Permanent link">&para;</a></h2>
 <p>Peer is the live status of one other node. Only dispatchWorker touches it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Peer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">    </span><span class="nx">Node</span><span class="w">     </span><span class="o">*</span><span class="nx">Node</span><span class="w">     </span><span class="c1">// which node this is (from cluster.conf, or learned by gossip)</span>
-<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="w">    </span><span class="nx">PingSent</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// PING sent and not answered yet (zero if none)</span>
-<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a><span class="w">    </span><span class="nx">PongRecv</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// last PONG received (zero if never)</span>
-<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>
-<a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a><span class="w">    </span><span class="c1">// Handshake is true for a node we heard about but that hasn't answered</span>
-<a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a><span class="w">    </span><span class="c1">// us yet. We don't trust what it says (its slots or gossip) until it does.</span>
-<a id="__codelineno-40-8" name="__codelineno-40-8" href="#__codelineno-40-8"></a><span class="w">    </span><span class="nx">Handshake</span><span class="w"> </span><span class="kt">bool</span>
-<a id="__codelineno-40-9" name="__codelineno-40-9" href="#__codelineno-40-9"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
-<a id="__codelineno-40-10" name="__codelineno-40-10" href="#__codelineno-40-10"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Peer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="w">    </span><span class="nx">Node</span><span class="w">     </span><span class="o">*</span><span class="nx">Node</span><span class="w">     </span><span class="c1">// which node this is (from cluster.conf, or learned by gossip)</span>
+<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="w">    </span><span class="nx">PingSent</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// PING sent and not answered yet (zero if none)</span>
+<a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="w">    </span><span class="nx">PongRecv</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="c1">// last PONG received (zero if never)</span>
+<a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a>
+<a id="__codelineno-44-6" name="__codelineno-44-6" href="#__codelineno-44-6"></a><span class="w">    </span><span class="c1">// Handshake is true for a node we heard about but that hasn't answered</span>
+<a id="__codelineno-44-7" name="__codelineno-44-7" href="#__codelineno-44-7"></a><span class="w">    </span><span class="c1">// us yet. We don't trust what it says (its slots or gossip) until it does.</span>
+<a id="__codelineno-44-8" name="__codelineno-44-8" href="#__codelineno-44-8"></a><span class="w">    </span><span class="nx">Handshake</span><span class="w"> </span><span class="kt">bool</span>
+<a id="__codelineno-44-9" name="__codelineno-44-9" href="#__codelineno-44-9"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
+<a id="__codelineno-44-10" name="__codelineno-44-10" href="#__codelineno-44-10"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Peer.Connected"></a></p>
 <h3 id="func-peer-connected">func (*Peer) Connected<a class="headerlink" href="#func-peer-connected" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">Connected</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">Connected</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>Connected reports whether we currently have a connection to the peer.</p>
 <p><a name="Peer.Failed"></a></p>
 <h3 id="func-peer-failed">func (*Peer) Failed<a class="headerlink" href="#func-peer-failed" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">Failed</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">Failed</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>Failed reports whether the peer is marked FAIL: a majority of masters agreed it has failed.</p>
 <p><a name="Peer.PFail"></a></p>
 <h3 id="func-peer-pfail">func (*Peer) PFail<a class="headerlink" href="#func-peer-pfail" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">PFail</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Peer</span><span class="p">)</span><span class="w"> </span><span class="nx">PFail</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>PFail reports whether we suspect the peer has failed: it hasn't answered us for longer than the node timeout. Only our opinion.</p>
 <p><a name="SlotRange"></a></p>
 <h2 id="type-slotrange">type SlotRange<a class="headerlink" href="#type-slotrange" title="Permanent link">&para;</a></h2>
 <p>SlotRange is an inclusive range of slots, e.g. 0-5460.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">SlotRange</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="w">    </span><span class="nx">Start</span><span class="p">,</span><span class="w"> </span><span class="nx">End</span><span class="w"> </span><span class="kt">int</span>
-<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">SlotRange</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="w">    </span><span class="nx">Start</span><span class="p">,</span><span class="w"> </span><span class="nx">End</span><span class="w"> </span><span class="kt">int</span>
+<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a><span class="p">}</span>
 </code></pre></div>
 <p>Generated by <a href="https://github.com/princjef/gomarkdoc">gomarkdoc</a></p>
 
