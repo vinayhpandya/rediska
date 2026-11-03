@@ -34,7 +34,7 @@ const (
 // ---------------------------------------------------------------- cluster
 
 type testCluster struct {
-	addrs []string // "127.0.0.1:<port>" for node1..node3
+	addrs []string // "127.0.0.1:<port>" for node1, node2, ...
 
 	// What startNode needs to start (or restart) a node.
 	bin, conf, dir string
@@ -50,6 +50,14 @@ type testCluster struct {
 // extra flags are passed to every node, e.g. "--cluster-node-timeout", "1000".
 func startCluster(t *testing.T, extra ...string) *testCluster {
 	t.Helper()
+	return startClusterWith(t, []string{"0-5460", "5461-10922", "10923-16383"}, extra...)
+}
+
+// startClusterWith is startCluster with one node per entry of specs. Each
+// spec is what follows the address on that node's cluster.conf line: its
+// slots, or "replicaof nodeN". Node i is named node<i+1>.
+func startClusterWith(t *testing.T, specs []string, extra ...string) *testCluster {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("end-to-end test: skipped with -short")
 	}
@@ -62,17 +70,16 @@ func startCluster(t *testing.T, extra ...string) *testCluster {
 		t.Fatalf("go build failed: %v\n%s", err, out)
 	}
 
-	// 2. Pick 3 free ports and write the layout.
+	// 2. Pick free ports and write the layout.
 	c := &testCluster{bin: bin, dir: dir, extra: extra}
-	ports := freePorts(t, 3)
+	ports := freePorts(t, len(specs))
 	c.ports = ports
 	c.procs = make([]*exec.Cmd, len(ports))
-	ranges := []string{"0-5460", "5461-10922", "10923-16383"}
 	var conf strings.Builder
 	for i, p := range ports {
 		addr := fmt.Sprintf("127.0.0.1:%d", p)
 		c.addrs = append(c.addrs, addr)
-		fmt.Fprintf(&conf, "node%d %s %s\n", i+1, addr, ranges[i])
+		fmt.Fprintf(&conf, "node%d %s %s\n", i+1, addr, specs[i])
 	}
 	c.conf = filepath.Join(dir, "cluster.conf")
 	if err := os.WriteFile(c.conf, []byte(conf.String()), 0o644); err != nil {

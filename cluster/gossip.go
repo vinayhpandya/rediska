@@ -32,7 +32,12 @@ func (b *Bus) learnFrom(m Message) {
 	if p == nil || p.Handshake {
 		return // a stranger, or a node that hasn't answered us yet
 	}
-	b.applySlots(p, m.Slots)
+	b.applyRole(p, m.Master)
+	slots := m.Slots
+	if p.Node.IsReplica() {
+		slots = nil
+	}
+	b.applySlots(p, slots)
 	for _, g := range m.Gossip {
 		if q := b.peers[g.ID]; q != nil {
 			b.noteReport(q, p, g.Flags)
@@ -40,6 +45,26 @@ func (b *Bus) learnFrom(m Message) {
 			b.learnNode(g, p)
 		}
 	}
+}
+
+// applyRole records the role p announced: a replica of the node with ID
+// master, or a master if master is "".
+func (b *Bus) applyRole(p *Peer, master string) {
+	if p.Node.MasterID == master {
+		return
+	}
+	p.Node.MasterID = master
+	if master == "" {
+		log.Printf("cluster bus: %s is a master", p.Node.Name)
+		return
+	}
+	name := master
+	if m := b.peers[master]; m != nil {
+		name = m.Node.Name
+	} else if master == b.layout.Self.ID {
+		name = b.layout.Self.Name
+	}
+	log.Printf("cluster bus: %s is a replica of %s", p.Node.Name, name)
 }
 
 // applySlots records the slots p announced. It's called for every message,

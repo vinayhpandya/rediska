@@ -6,7 +6,7 @@ import (
 	"github.com/vinayhpandya/rediska/core"
 )
 
-// A bus message is a RESP array of 7 items:
+// A bus message is a RESP array of 8 items:
 //
 //	1  type      bulk string   PING, PONG or MEET
 //	2  id        bulk string   sender's node ID
@@ -17,20 +17,23 @@ import (
 //	                           start1 end1 start2 end2 ...
 //	7  gossip    array         a few other nodes the sender knows, each an
 //	                           array of 6: id name addr flags ping-sent pong-recv
+//	8  master    bulk string   ID of the master the sender replicates, or
+//	                           empty if the sender is a master
 //
 // MEET is a PING that also says "add me if you don't know me": it's the
 // only message that makes a node take on a stranger (see gossip.go).
 //
-// Items 1-6 are the header: what the sender says about itself. A node only
-// ever announces its own slots; gossip entries carry who exists, not who
-// owns what. Ping-sent and pong-recv are the sender's view of that node, as
-// Unix milliseconds (0 means none pending / never).
+// Items 1-6 and 8 are the header: what the sender says about itself. A
+// node only ever announces its own slots; gossip entries carry who exists,
+// not who owns what. Ping-sent and pong-recv are the sender's view of that
+// node, as Unix milliseconds (0 means none pending / never).
 //
 // A PING with no slots and no gossip, typed by hand:
 //
-//	*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n
-
-// NodeFlags is a set of node state bits carried on the bus.
+//	*8\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n$0\r\n\r\n
+//
+// A node's role is part of the header, so like its slots, it's only ever
+// announced by the node itself, never by gossip
 type NodeFlags uint16
 
 const (
@@ -50,6 +53,7 @@ type Message struct {
 	Flags  NodeFlags
 	Slots  []SlotRange   // the sender's own slots
 	Gossip []GossipEntry // other nodes the sender knows about
+	Master string
 }
 
 // GossipEntry is what the sender knows about one other node.
@@ -63,7 +67,7 @@ type GossipEntry struct {
 }
 
 const (
-	messageFields = 7
+	messageFields = 8
 	gossipFields  = 6
 )
 
@@ -93,6 +97,7 @@ func (m *Message) encode() []byte {
 		core.EncodeInteger(int64(m.Flags)),
 		core.EncodeRawArray(slots),
 		core.EncodeRawArray(gossip),
+		core.EncodeBulkString(m.Master),
 	})
 }
 
@@ -129,6 +134,9 @@ func decodeMessage(v any) (Message, error) {
 		return Message{}, err
 	}
 	if m.Gossip, err = decodeGossip(arr[6]); err != nil {
+		return Message{}, err
+	}
+	if m.Master, err = wantString(arr[7], "master"); err != nil {
 		return Message{}, err
 	}
 	return m, nil

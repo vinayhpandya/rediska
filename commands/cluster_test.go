@@ -159,3 +159,53 @@ func TestClusterKeysInSlot(t *testing.T) {
 		t.Errorf("GETKEYSINSLOT 8106 2: got %q, want 2 keys", got)
 	}
 }
+
+// useReplicaLayout loads 2 masters and node3, a replica of node1, as seen
+// by node3.
+func useReplicaLayout(t *testing.T) *cluster.Layout {
+	t.Helper()
+	conf := "node1 127.0.0.1:7001 0-8191\n" +
+		"node2 127.0.0.1:7002 8192-16383\n" +
+		"node3 127.0.0.1:7003 replicaof node1\n"
+	l, err := cluster.ParseLayout(strings.NewReader(conf), 7003)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cluster.Current, config.ClusterEnabled = l, true
+	t.Cleanup(func() { cluster.Current, config.ClusterEnabled = nil, false })
+	return l
+}
+
+// A replica is flagged "slave", with its master's ID in the fourth column.
+func TestClusterNodesShowsReplicas(t *testing.T) {
+	l := useReplicaLayout(t)
+	body := id(l, "node1") + " 127.0.0.1:7001@17001 master - 0 0 1 connected 0-8191\n" +
+		id(l, "node2") + " 127.0.0.1:7002@17002 master - 0 0 2 connected 8192-16383\n" +
+		id(l, "node3") + " 127.0.0.1:7003@17003 myself,slave " + id(l, "node1") + " 0 0 3 connected\n"
+	want := fmt.Sprintf("$%d\r\n%s\r\n", len(body), body)
+	if got := string(handleCluster([]string{"nodes"})); got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A replica owns no slots, so it sends every key to the slot's owner:
+// reads and writes alike, for its own master's slots too.
+func TestReplicaRedirectsToTheOwner(t *testing.T) {
+	useReplicaLayout(t)
+	freshStore(t)
+	for _, c := range []struct {
+		cmd  *Command
+		want string
+	}{
+		{&Command{Name: "SET", Args: []string{"age", "30"}}, "-MOVED 741 127.0.0.1:7001\r\n"},     // node1's slot
+		{&Command{Name: "GET", Args: []string{"age"}}, "-MOVED 741 127.0.0.1:7001\r\n"},           // reads too
+		{&Command{Name: "SET", Args: []string{"visits", "1"}}, "-MOVED 12263 127.0.0.1:7002\r\n"}, // node2's slot
+	} {
+		if got := string(Dispatch(c.cmd)); got != c.want {
+			t.Errorf("%s %v: got %q, want %q", c.cmd.Name, c.cmd.Args, got, c.want)
+		}
+	}
+	if _, ok := store.Default.Get("age"); ok {
+		t.Fatal("the replica stored a key")
+	}
+}

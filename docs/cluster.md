@@ -90,6 +90,32 @@ A node takes **its own** slots from the file. It learns every other node's
 slots from that node, over the bus, a moment after they connect: a node
 only ever speaks for its own slots.
 
+### Replicas
+
+A line can make a node a **replica** of another node, instead of giving it
+slots:
+
+```text title="cluster.conf"
+node1  127.0.0.1:7001  0-5460
+node2  127.0.0.1:7002  5461-10922
+node3  127.0.0.1:7003  10923-16383
+node4  127.0.0.1:7004  replicaof node1
+node5  127.0.0.1:7005  replicaof node2
+node6  127.0.0.1:7006  replicaof node3
+```
+
+- A replica owns no slots, so a client that sends it a key gets `MOVED` to
+  the slot's owner, its master, for reads and writes alike.
+- Its master must be another line in the file, and must be a master:
+  replicas of replicas aren't supported.
+- Like its slots, a node's role is announced by the node itself over the
+  bus. `CLUSTER NODES` shows a replica as `slave`, with its master's ID in
+  the fourth column.
+- Only masters count toward the majority in
+  [failure detection](#failure-detection).
+
+For now a replica is only a role: it doesn't copy its master's data yet.
+
 ### The cluster script
 
 `scripts/cluster.sh` does all of that for you:
