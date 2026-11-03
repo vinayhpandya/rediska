@@ -245,8 +245,10 @@ func (m *Master) Serve(ctx context.Context, conn net.Conn, run func(func()) bool
 		r.close()
 	}()
 
+	// Answer SYNC right away, even if there's nothing to copy: the replica
+	// waits for this +OK before it counts itself as connected.
 	w := bufio.NewWriter(conn)
-	if _, err := w.Write(core.EncodeSimpleString("OK")); err != nil {
+	if !write(conn, w, core.EncodeSimpleString("OK"), r) {
 		return
 	}
 	copying := true
