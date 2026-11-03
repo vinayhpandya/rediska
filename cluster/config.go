@@ -20,6 +20,10 @@ type Node struct {
 	Port  int
 	ID    string // 40 hex chars, derived from Name so it's stable across restarts
 	Slots []SlotRange
+	// MasterID is the ID of the master this node replicates, or "" if the
+	// node is a master itself. A replica owns no slots: clients that send
+	// it a key get MOVED to the slot's owner, which is its master.
+	MasterID string
 }
 
 // SlotRange is an inclusive range of slots, e.g. 0-5460.
@@ -44,6 +48,9 @@ func (l *Layout) Owner(slot int) *Node {
 	}
 	return l.owner[slot]
 }
+
+// IsReplica reports whether n replicates another node.
+func (n *Node) IsReplica() bool { return n.MasterID != "" }
 
 // ============================================================ runtime changes
 // The layout starts from cluster.conf, then the cluster bus changes it as
@@ -75,6 +82,17 @@ func (l *Layout) ForgetOthersSlots() {
 	for _, n := range l.Nodes {
 		if n != l.Self {
 			l.SetSlots(n, nil)
+		}
+	}
+}
+
+// ForgetOthersRoles marks every node but Self as a master, for the same
+// reason as ForgetOthersSlots: each node tells us its own role over the
+// bus. cluster.conf only decides Self's role.
+func (l *Layout) ForgetOthersRoles() {
+	for _, n := range l.Nodes {
+		if n != l.Self {
+			n.MasterID = ""
 		}
 	}
 }
@@ -144,7 +162,9 @@ func ParseLayout(r io.Reader, myPort int) (*Layout, error) {
 
 // ParseLayout parses a layout file. Each non-empty line is:
 //
-//	<name> <host:port> <slot or range> [<slot or range> ...]
+// or a replica of the master called <master>, which owns no slots:
+//
+//	<name> <host:port> replicaof <master>
 //
 // Anything after '#' is a comment. Any mistake is an error, because a node
 // with a wrong layout would silently send clients to the wrong place.
@@ -152,7 +172,7 @@ func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error) {
 	l := &Layout{}
 	names := map[string]bool{}
 	addrs := map[string]bool{}
-
+	replicaOf := map[*Node]string{}
 	sc := bufio.NewScanner(r)
 	lineNo := 0
 	for sc.Scan() {
@@ -166,7 +186,7 @@ func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error) {
 			continue
 		}
 		if len(fields) < 3 {
-			return nil, fmt.Errorf("cluster config line %d: want <name> <host:port> <slots...>", lineNo)
+			return nil, fmt.Errorf("cluster config line %d: want <name> <host:port> <slots...> or <name> <host:port> replicaof <master>", lineNo)
 		}
 
 		name, addr := fields[0], fields[1]
@@ -186,7 +206,15 @@ func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error) {
 		}
 
 		n := &Node{Name: name, Addr: addr, Port: port, ID: nodeID(name)}
-		for _, spec := range fields[2:] {
+		specs := fields[2:]
+		if strings.EqualFold(specs[0], "replicaof") {
+			if len(specs) != 2 {
+				return nil, fmt.Errorf("cluster config line %d: want replicaof <master>, and no slots", lineNo)
+			}
+			replicaOf[n] = specs[1]
+			specs = nil
+		}
+		for _, spec := range specs {
 			sr, err := parseRange(spec)
 			if err != nil {
 				return nil, fmt.Errorf("cluster config line %d: %v", lineNo, err)
@@ -221,6 +249,9 @@ func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error) {
 	if len(l.Nodes) == 0 {
 		return nil, fmt.Errorf("cluster config: no nodes defined")
 	}
+	if err := l.linkReplicas(replicaOf); err != nil {
+		return nil, err
+	}
 	if l.Self == nil {
 		if myName != "" {
 			return nil, fmt.Errorf("cluster config: no node is named %q, so I can't find myself", myName)
@@ -228,6 +259,33 @@ func ParseLayoutAs(r io.Reader, myPort int, myName string) (*Layout, error) {
 		return nil, fmt.Errorf("cluster config: no node uses port %d, so I can't find myself", myPort)
 	}
 	return l, nil
+}
+
+// linkReplicas sets each replica's MasterID, once every node is known (a
+// replica may be listed before its master). A replica must follow a
+// master: replicas of replicas aren't supported.
+func (l *Layout) linkReplicas(replicaOf map[*Node]string) error {
+	byName := map[string]*Node{}
+	for _, n := range l.Nodes {
+		byName[n.Name] = n
+	}
+	for _, n := range l.Nodes { // in file order, so errors are predictable
+		masterName, ok := replicaOf[n]
+		if !ok {
+			continue
+		}
+		m := byName[masterName]
+		switch {
+		case m == nil:
+			return fmt.Errorf("cluster config: %s is a replica of %q, which isn't in the file", n.Name, masterName)
+		case m == n:
+			return fmt.Errorf("cluster config: %s can't be a replica of itself", n.Name)
+		case replicaOf[m] != "":
+			return fmt.Errorf("cluster config: %s is a replica of %s, which is a replica itself", n.Name, m.Name)
+		}
+		n.MasterID = m.ID
+	}
+	return nil
 }
 
 // parseRange accepts "42" or "0-5460".

@@ -58,11 +58,12 @@ func (b *Bus) checkTimeout(p *Peer, now time.Time) {
 // says PFAIL or FAIL, that's a failure report from reporter; anything else
 // takes back an earlier report.
 //
-// Like Redis, only masters' reports count. Every Rediska node is a master
-// until replicas arrive, so for now that's every trusted node (learnFrom
-// only calls us for those).
+// Like Redis, only masters' reports count: the majority needed for FAIL is
+// a majority of masters (mastersWithSlots), so a replica's report would
+// count toward a total it isn't part of. learnFrom only calls us for
+// trusted nodes.
 func (b *Bus) noteReport(p, reporter *Peer, flags NodeFlags) {
-	if flags&(FlagPFail|FlagFail) == 0 {
+	if flags&(FlagPFail|FlagFail) == 0 || reporter.Node.IsReplica() {
 		delete(p.failReports, reporter.Node.ID)
 		return
 	}
@@ -73,16 +74,21 @@ func (b *Bus) noteReport(p, reporter *Peer, flags NodeFlags) {
 	b.markFailedIfAgreed(p)
 }
 
-// markFailedIfAgreed marks p FAIL if we suspect it ourselves and, counting
-// us, a majority of masters do. It's called from both places where the
-// count can change: when we start suspecting p (checkTimeout), and when a
-// report arrives (noteReport).
+// markFailedIfAgreed marks p FAIL if we suspect it ourselves and a
+// majority of masters do: the masters that reported it, plus us if we're
+// a master. A replica's own suspicion doesn't count toward the majority.
+//
+// It's called from both places where the count can change: when we start
+// suspecting p (checkTimeout), and when a report arrives (noteReport).
 func (b *Bus) markFailedIfAgreed(p *Peer) {
 	if !p.PFail() || p.Failed() {
 		return // only our own suspicion can start it; FAIL is already final
 	}
 	needed := b.mastersWithSlots()/2 + 1
-	agree := 1 + b.liveReports(p) // us, plus the masters that reported it
+	agree := b.liveReports(p) // the masters that reported it
+	if !b.layout.Self.IsReplica() {
+		agree++ // and us
+	}
 	if agree < needed {
 		return
 	}

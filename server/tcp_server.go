@@ -94,6 +94,7 @@ func Run(ctx context.Context, host string, port int, appendOnly bool, appendFile
 		// Other nodes' slots come from those nodes, over the bus, not from
 		// our copy of cluster.conf: a node only speaks for its own slots.
 		cluster.Current.ForgetOthersSlots()
+		cluster.Current.ForgetOthersRoles()
 		bus = cluster.NewBus(cluster.Current)
 		if err := bus.Listen(host); err != nil {
 			listener.Close()
