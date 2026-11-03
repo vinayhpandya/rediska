@@ -23,6 +23,10 @@ func handleDebug(args []string) []byte {
 		return core.EncodeInteger(store.Default.UsedMemory())
 	case "KEYS":
 		return core.EncodeInteger(int64(store.Default.KeyCount()))
+	case "DIGEST":
+		// A fingerprint of all the data: a replica that holds exactly its
+		// master's data shows the same digest.
+		return core.EncodeBulkString(store.Default.Digest())
 	default:
 		return core.EncodeError("ERR unknown DEBUG subcommand '" + args[0] + "'")
 	}
