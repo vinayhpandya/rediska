@@ -849,6 +849,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#func-frombytes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func FromBytes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-new" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -864,6 +875,17 @@
     <span class="md-ellipsis">
       
         func (*HLL) Add
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-hll-bytes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*HLL) Bytes
       
     </span>
   </a>
@@ -1012,6 +1034,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#func-frombytes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func FromBytes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-new" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1027,6 +1060,17 @@
     <span class="md-ellipsis">
       
         func (*HLL) Add
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-hll-bytes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*HLL) Bytes
       
     </span>
   </a>
@@ -1111,8 +1155,10 @@
 <h2 id="index">Index<a class="headerlink" href="#index" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="#HLL">type HLL</a></li>
+<li><a href="#FromBytes">func FromBytes(b []byte) (*HLL, error)</a></li>
 <li><a href="#New">func New() *HLL</a></li>
 <li><a href="#HLL.Add">func (h *HLL) Add(data []byte) bool</a></li>
+<li><a href="#HLL.Bytes">func (h *HLL) Bytes() []byte</a></li>
 <li><a href="#HLL.Count">func (h *HLL) Count() uint64</a></li>
 <li><a href="#HLL.Encoding">func (h *HLL) Encoding() string</a></li>
 <li><a href="#HLL.Merge">func (h *HLL) Merge(other *HLL) bool</a></li>
@@ -1125,35 +1171,45 @@
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="p">}</span>
 </code></pre></div>
+<p><a name="FromBytes"></a></p>
+<h3 id="func-frombytes">func FromBytes<a class="headerlink" href="#func-frombytes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">FromBytes</span><span class="p">(</span><span class="nx">b</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">HLL</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+</code></pre></div>
+<p>FromBytes rebuilds an HLL from what Bytes returned. It rejects anything that isn't the right shape, rather than build a broken sketch.</p>
 <p><a name="New"></a></p>
 <h3 id="func-new">func New<a class="headerlink" href="#func-new" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">New</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">New</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span>
 </code></pre></div>
 <p>New creates an empty HLL, starting in sparse form: a single XZERO opcode covering all 16384 registers, exactly like a fresh Redis HLL.</p>
 <p><a name="HLL.Add"></a></p>
 <h3 id="func-hll-add">func (*HLL) Add<a class="headerlink" href="#func-hll-add" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Add</span><span class="p">(</span><span class="nx">data</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Add</span><span class="p">(</span><span class="nx">data</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>Add hashes data and updates the relevant register if this element produced a longer run of leading zeros than previously seen there. Returns true if the register (and therefore the estimate) changed.</p>
+<p><a name="HLL.Bytes"></a></p>
+<h3 id="func-hll-bytes">func (*HLL) Bytes<a class="headerlink" href="#func-hll-bytes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Bytes</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span>
+</code></pre></div>
+<p>Bytes returns h as bytes that FromBytes turns back into an equal HLL: one byte for the encoding (0 sparse, 1 dense), then the registers in that encoding. Replication uses it to copy a HyperLogLog to a replica.</p>
 <p><a name="HLL.Count"></a></p>
 <h3 id="func-hll-count">func (*HLL) Count<a class="headerlink" href="#func-hll-count" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Count</span><span class="p">()</span><span class="w"> </span><span class="kt">uint64</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Count</span><span class="p">()</span><span class="w"> </span><span class="kt">uint64</span>
 </code></pre></div>
 <p>Count returns the estimated cardinality, using the harmonic-mean estimator with the standard low-cardinality linear-counting correction. (Large-range bias correction is omitted here since a 64-bit hash never approaches the collision range that requires it.)</p>
 <p>If no register has changed since the last call, the cached result is returned directly without rescanning -- this is the common case, since most Add calls don't actually beat an existing register's max value.</p>
 <p><a name="HLL.Encoding"></a></p>
 <h3 id="func-hll-encoding">func (*HLL) Encoding<a class="headerlink" href="#func-hll-encoding" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Encoding</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Encoding</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span>
 </code></pre></div>
 <p>Encoding reports which representation is currently active ("sparse" or "dense") -- mirrors Redis's PFDEBUG ENCODING, mainly useful for tests and debugging.</p>
 <p><a name="HLL.Merge"></a></p>
 <h3 id="func-hll-merge">func (*HLL) Merge<a class="headerlink" href="#func-hll-merge" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Merge</span><span class="p">(</span><span class="nx">other</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Merge</span><span class="p">(</span><span class="nx">other</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>Merge folds other's registers into h via an elementwise max -- this is the same operation Redis's PFMERGE (and multi-key PFCOUNT, on a scratch copy) performs. The result always ends up dense (h is promoted first if it was sparse), matching how Redis computes merges internally rather than trying to splice two sparse streams together. Returns true if any register in h changed.</p>
 <p><a name="HLL.Size"></a></p>
 <h3 id="func-hll-size">func (*HLL) Size<a class="headerlink" href="#func-hll-size" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Size</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">h</span><span class="w"> </span><span class="o">*</span><span class="nx">HLL</span><span class="p">)</span><span class="w"> </span><span class="nx">Size</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
 </code></pre></div>
 <p>Size returns the number of bytes the sketch's current representation (sparse or dense) takes up.</p>
 <p>Generated by <a href="https://github.com/princjef/gomarkdoc">gomarkdoc</a></p>

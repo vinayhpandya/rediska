@@ -1002,6 +1002,7 @@
 <p><a name="CommandRequest"></a></p>
 <h2 id="type-commandrequest">type CommandRequest<a class="headerlink" href="#type-commandrequest" title="Permanent link">&para;</a></h2>
 <p>CommandRequest is one unit of work sent from a connection to the dispatch worker. Exactly one of its three forms is used: a single command, a MULTI/EXEC batch, or a pipeline. The worker sends the encoded reply back on its reply channel.</p>
+<p>Two other kinds of work use the same channel, so they run in order with commands: busEvent (the cluster bus) and task (replication).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">CommandRequest</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">}</span>
