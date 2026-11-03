@@ -479,6 +479,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Replicas">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-a-replica-copies-its-masters-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a replica copies its master's data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1115,6 +1132,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Replicas">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-a-replica-copies-its-masters-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a replica copies its master's data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1269,7 +1303,8 @@ the right node.</p>
 <a href="#the-cluster-bus">cluster bus</a>: they learn each other's slots, add nodes
 with <a href="#adding-a-node-with-cluster-meet"><code>CLUSTER MEET</code></a>, and
 <a href="#failure-detection">agree when a node has failed</a>. Slots can't move while
-running yet, and there are no replicas or failover. See
+running yet, and <a href="#replicas">replicas</a> keep a copy of their master's
+data but there's no failover yet. See
 <a href="#limitations">Limitations</a>.</p>
 <h2 id="slots">Slots<a class="headerlink" href="#slots" title="Permanent link">&para;</a></h2>
 <p>Every key belongs to one of <strong>16384 hash slots</strong>:</p>
@@ -1346,13 +1381,50 @@ slots:</p>
 <li>Only masters count toward the majority in
   <a href="#failure-detection">failure detection</a>.</li>
 </ul>
-<p>For now a replica is only a role: it doesn't copy its master's data yet.</p>
+<h4 id="how-a-replica-copies-its-masters-data">How a replica copies its master's data<a class="headerlink" href="#how-a-replica-copies-its-masters-data" title="Permanent link">&para;</a></h4>
+<p>When a replica starts, it connects to its master's client port and sends
+<code>SYNC</code>. The master then sends it, over that one connection:</p>
+<ol>
+<li><strong>a snapshot</strong>: every key, as the command that recreates it
+   (<code>SET key value PXAT &lt;ms&gt;</code>, or an internal <code>_HLLRESTORE</code> for a
+   HyperLogLog), and</li>
+<li><strong>every change since</strong>: the same entries the AOF records, including a
+   <code>DEL</code> for every key that expires or is evicted, and MULTI/EXEC blocks
+   that the replica applies all at once.</li>
+</ol>
+<p>The snapshot is copied <strong>a few slots at a time</strong>, between client commands,
+so clients never wait for the whole dataset: each step copies whole slots
+until it has about 1,000 keys or 1 MB, and copying 300,000 keys takes
+about 290 steps of 2 ms each. While the copy runs, a change is sent to the
+replica only if its slot has already been copied; a change to a slot that
+hasn't been copied yet is skipped, because that slot is copied later with
+the change already in it. This works because every command's keys are in
+one slot.</p>
+<p>Check a replica with:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7004</span><span class="w"> </span>info<span class="w"> </span>replication
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="gp"># </span>Replication
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="go">role:slave</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="go">master_host:127.0.0.1</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="go">master_port:7001</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="go">master_link_status:up</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>debug<span class="w"> </span>digest<span class="w">      </span><span class="c1"># a fingerprint of all the data...</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7004</span><span class="w"> </span>debug<span class="w"> </span>digest<span class="w">      </span><span class="c1"># ...the same on master and replica</span>
+</code></pre></div>
+<p>A replica:</p>
+<ul>
+<li><strong>doesn't expire or evict keys</strong> itself: its master decides, and sends
+  the <code>DEL</code>s, so the two copies can't drift apart.</li>
+<li><strong>doesn't use an AOF</strong>, even with <code>--appendOnly</code>: it gets a full copy
+  every time it starts or reconnects.</li>
+<li>still answers clients with <code>MOVED</code>: reading from replicas isn't
+  supported yet.</li>
+</ul>
 <h3 id="the-cluster-script">The cluster script<a class="headerlink" href="#the-cluster-script" title="Permanent link">&para;</a></h3>
 <p><code>scripts/cluster.sh</code> does all of that for you:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>./scripts/cluster.sh<span class="w"> </span>start<span class="w">     </span><span class="c1"># build, write the layout, start the nodes</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>./scripts/cluster.sh<span class="w"> </span>status<span class="w">    </span><span class="c1"># which nodes are running, and their key counts</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>./scripts/cluster.sh<span class="w"> </span>stop<span class="w">      </span><span class="c1"># stop them; data stays in each node's AOF</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>./scripts/cluster.sh<span class="w"> </span>clean<span class="w">     </span><span class="c1"># stop and delete all their files</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>./scripts/cluster.sh<span class="w"> </span>start<span class="w">     </span><span class="c1"># build, write the layout, start the nodes</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>./scripts/cluster.sh<span class="w"> </span>status<span class="w">    </span><span class="c1"># which nodes are running, and their key counts</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>./scripts/cluster.sh<span class="w"> </span>stop<span class="w">      </span><span class="c1"># stop them; data stays in each node's AOF</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>./scripts/cluster.sh<span class="w"> </span>clean<span class="w">     </span><span class="c1"># stop and delete all their files</span>
 </code></pre></div>
 <p>Files go in <code>/tmp/rediska-cluster/</code>. <code>NODES=4 ./scripts/cluster.sh start</code>
 starts 4 nodes with the slots split evenly (run <code>clean</code> first if you change
@@ -1376,13 +1448,13 @@ Redis:</p>
     E -- yes --&gt; RUN</code></pre>
 <p>The error texts match Redis 7 word for word, so clients that understand
 Redis Cluster understand Rediska:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">MOVED 5798 127.0.0.1:7002</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-c<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="go">-&gt; Redirected to slot [5798] located at 127.0.0.1:7002</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="go">OK</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>del<span class="w"> </span>age<span class="w"> </span>name
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CROSSSLOT Keys in request don't hash to the same slot</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">MOVED 5798 127.0.0.1:7002</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-c<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span><span class="nb">set</span><span class="w"> </span>name<span class="w"> </span>vinay
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="go">-&gt; Redirected to slot [5798] located at 127.0.0.1:7002</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="go">OK</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>del<span class="w"> </span>age<span class="w"> </span>name
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CROSSSLOT Keys in request don't hash to the same slot</span>
 </code></pre></div>
 <p><code>redis-cli -c</code> follows <code>MOVED</code> redirects for you. In a pipeline, each
 command gets its own reply, in order.</p>
@@ -1406,7 +1478,7 @@ of 7 items: type (<code>PING</code>, <code>PONG</code>, <code>MEET</code> or <co
 address and flags, the sender's own slots (as start/end pairs), and a gossip
 section: a few other nodes the sender knows, each with its flags and
 ping/pong times. You can talk to the bus by hand:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gp">$ </span><span class="o">(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">'*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n'</span><span class="p">;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">1</span><span class="o">)</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>localhost<span class="w"> </span><span class="m">17001</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span><span class="o">(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">'*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n'</span><span class="p">;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">1</span><span class="o">)</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>localhost<span class="w"> </span><span class="m">17001</span>
 </code></pre></div>
 <p>The reply is a <code>PONG</code> carrying node1's ID, name, address and slots
 (<code>0 5460</code>), and some gossip. node1 doesn't add the sender or act on what it
@@ -1418,8 +1490,8 @@ for which goroutine does what.</p>
 <h2 id="adding-a-node-with-cluster-meet">Adding a node with CLUSTER MEET<a class="headerlink" href="#adding-a-node-with-cluster-meet" title="Permanent link">&para;</a></h2>
 <p><code>CLUSTER MEET ip port</code> (the node's client port) introduces a node to the
 cluster. You only need to tell <strong>one</strong> node; gossip tells the rest.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>meet<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span><span class="m">7004</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="go">OK</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>meet<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span><span class="m">7004</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="go">OK</span>
 </code></pre></div>
 <p>What happens next:</p>
 <ol>
@@ -1488,17 +1560,17 @@ until they reconnect to it (their first message is always a <code>MEET</code>).<
 <li>When node3 comes back and answers a PING, each node clears PFAIL and
    FAIL.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>nodes
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="go">...  127.0.0.1:7003@17003 master,fail - 1793307217542 1793307216796 3 disconnected 10923-16383</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>info
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="go">cluster_state:fail</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="go">cluster_slots_assigned:16384</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="go">cluster_slots_ok:10923</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="go">cluster_slots_pfail:0</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="go">cluster_slots_fail:5461</span>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="go">...</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>get<span class="w"> </span>foo
-<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CLUSTERDOWN Hash slot not served</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>nodes
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="go">...  127.0.0.1:7003@17003 master,fail - 1793307217542 1793307216796 3 disconnected 10923-16383</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>info
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="go">cluster_state:fail</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="go">cluster_slots_assigned:16384</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="go">cluster_slots_ok:10923</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="go">cluster_slots_pfail:0</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="go">cluster_slots_fail:5461</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="go">...</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>get<span class="w"> </span>foo
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CLUSTERDOWN Hash slot not served</span>
 </code></pre></div>
 <p>Why a majority: one node's own network link might be the problem. If only
 node1 can't reach node3, node2 still hears node3 fine, never reports it,
@@ -1515,38 +1587,38 @@ the node you're connected to. Rediska checks this in two places, as Redis
 does:</p>
 <p><strong>While queuing</strong>, each command is checked on its own. If one fails, the
 transaction is marked broken and <code>EXEC</code> refuses to run anything:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">127.0.0.1:7001&gt; multi</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="go">OK</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="go">127.0.0.1:7001(TX)&gt; set age 30</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="go">QUEUED</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set name vinay</span>
-<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">MOVED 5798 127.0.0.1:7002</span>
-<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="go">127.0.0.1:7001(TX)&gt; exec</span>
-<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">EXECABORT Transaction discarded because of previous errors.</span>
-</code></pre></div>
-<p><strong>At <code>EXEC</code></strong>, all the queued keys are checked together. This catches
-commands that are fine on their own but use different slots:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">127.0.0.1:7001&gt; multi</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="go">OK</span>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="go">127.0.0.1:7001(TX)&gt; set age 30</span>
 <a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="go">QUEUED</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set foo2 x</span>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="go">QUEUED</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set name vinay</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">MOVED 5798 127.0.0.1:7002</span>
 <a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="go">127.0.0.1:7001(TX)&gt; exec</span>
-<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CROSSSLOT Keys in request don't hash to the same slot</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">EXECABORT Transaction discarded because of previous errors.</span>
+</code></pre></div>
+<p><strong>At <code>EXEC</code></strong>, all the queued keys are checked together. This catches
+commands that are fine on their own but use different slots:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">127.0.0.1:7001&gt; multi</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">OK</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">127.0.0.1:7001(TX)&gt; set age 30</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="go">QUEUED</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="go">127.0.0.1:7001(TX)&gt; set foo2 x</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="go">QUEUED</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="go">127.0.0.1:7001(TX)&gt; exec</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="gp gp-VirtualEnv">(error)</span> <span class="go">CROSSSLOT Keys in request don't hash to the same slot</span>
 </code></pre></div>
 <p><code>age</code> (slot 741) and <code>foo2</code> (slot 1044) are both on node1, but in different
 slots, so the transaction is refused. Either way, a transaction never runs
 halfway. Use hash tags to keep a transaction's keys together:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">127.0.0.1:7002&gt; multi</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">OK</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">127.0.0.1:7002(TX)&gt; set {user1}.name vinay</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="go">QUEUED</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="go">127.0.0.1:7002(TX)&gt; incr {user1}.visits</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="go">QUEUED</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="go">127.0.0.1:7002(TX)&gt; exec</span>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="go">1) OK</span>
-<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="go">2) (integer) 1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">127.0.0.1:7002&gt; multi</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">OK</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="go">127.0.0.1:7002(TX)&gt; set {user1}.name vinay</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="go">QUEUED</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="go">127.0.0.1:7002(TX)&gt; incr {user1}.visits</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="go">QUEUED</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="go">127.0.0.1:7002(TX)&gt; exec</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="go">1) OK</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="go">2) (integer) 1</span>
 </code></pre></div>
 <h2 id="cluster-commands">CLUSTER commands<a class="headerlink" href="#cluster-commands" title="Permanent link">&para;</a></h2>
 <table>
@@ -1603,14 +1675,14 @@ halfway. Use hash tags to keep a transaction's keys together:</p>
 <p><code>INFO cluster</code> reports <code>cluster_enabled:1</code> on a cluster node.</p>
 <p><code>COUNTKEYSINSLOT</code> and <code>GETKEYSINSLOT</code> answer about the node you ask, whoever
 owns the slot, and never redirect:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">3</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>getkeysinslot<span class="w"> </span><span class="m">8106</span><span class="w"> </span><span class="m">10</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="go">1) "{user1}.name"</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="go">2) "{user1}.email"</span>
-<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="go">3) "{user1}.visits"</span>
-<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
-<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">0</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">3</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7002</span><span class="w"> </span>cluster<span class="w"> </span>getkeysinslot<span class="w"> </span><span class="m">8106</span><span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="go">1) "{user1}.name"</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="go">2) "{user1}.email"</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="go">3) "{user1}.visits"</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="gp">$ </span>redis-cli<span class="w"> </span>-p<span class="w"> </span><span class="m">7001</span><span class="w"> </span>cluster<span class="w"> </span>countkeysinslot<span class="w"> </span><span class="m">8106</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="gp gp-VirtualEnv">(integer)</span> <span class="go">0</span>
 </code></pre></div>
 <p>To answer these quickly, each cluster node keeps a small index of which of
 its keys are in each slot, next to its data. It's updated whenever a key is
@@ -1653,8 +1725,15 @@ never dropped, even if the layout file changed while it was down.</p>
 <li><strong>No slot migration</strong>: slots can't move between running nodes, and if
   two nodes claim the same slot, the first owner keeps it (no config
   epochs yet).</li>
-<li><strong>No replicas or failover</strong>: a FAIL node's slots get <code>CLUSTERDOWN</code> until
-  it comes back.</li>
+<li><strong>No failover</strong>: a FAIL master's slots get <code>CLUSTERDOWN</code> until it comes
+  back, even though its replica has the data.</li>
+<li><strong>Every reconnect is a full copy</strong>: a replica that loses its connection,
+  even briefly, copies everything again.</li>
+<li><strong>A slot is copied in one step</strong>: if very many keys share a hash tag,
+  copying that one slot holds up clients for longer.</li>
+<li><strong>A replica that falls far behind is disconnected</strong>: if 4096 changes or
+  64 MB are waiting to be sent to it, the master drops it, and it
+  reconnects and copies everything again.</li>
 <li><strong>Every node PINGs every node once a second</strong>: fine for a few nodes;
   Redis's schedule (about one random node a second) scales better.</li>
 </ul>
