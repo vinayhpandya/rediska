@@ -37,6 +37,8 @@ var keySpecs = map[string]KeySpec{
 	"DEBUG":     noKeys,
 	"CLUSTER":   noKeys,
 	"_EXPIRY":   noKeys,
+
+	"_HLLRESTORE": {1, 1, 1}, // internal: copies a HyperLogLog to a replica
 }
 
 // KeysOf returns the key arguments of cmd. ok is false if the command has no
