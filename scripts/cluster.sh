@@ -8,7 +8,8 @@
 #   ./scripts/cluster.sh clean    stop, and delete all their files
 #
 # Settings (environment variables):
-#   NODES=3          how many nodes
+#   NODES=3          how many masters (each owns an equal share of the slots)
+#   REPLICAS=0       how many replicas per master, on the ports after the masters'
 #   BASE_PORT=7001   first port; nodes use BASE_PORT, BASE_PORT+1, ...
 #   DIR=/tmp/rediska-cluster   where cluster.conf, logs, AOFs and pids go
 #
@@ -16,6 +17,7 @@
 set -euo pipefail
 
 NODES=${NODES:-3}
+REPLICAS=${REPLICAS:-0}
 BASE_PORT=${BASE_PORT:-7001}
 DIR=${DIR:-/tmp/rediska-cluster}
 NODE_TIMEOUT=${NODE_TIMEOUT:-3000}
@@ -25,7 +27,7 @@ BIN="$PWD/rediska"
 
 ports() {
 	local i
-	for ((i = 0; i < NODES; i++)); do echo $((BASE_PORT + i)); done
+	for ((i = 0; i < NODES * (1 + REPLICAS); i++)); do echo $((BASE_PORT + i)); done
 }
 
 is_running() { # port
@@ -34,9 +36,11 @@ is_running() { # port
 }
 
 # write_conf splits the slots the same way `redis-cli --cluster create`
-# does, so 3 nodes get 0-5460, 5461-10922, 10923-16383.
+# does, so 3 nodes get 0-5460, 5461-10922, 10923-16383. Replicas come
+# after the masters: with 3 masters and REPLICAS=1, node4 replicates node1,
+# node5 node2 and node6 node3.
 write_conf() {
-	awk -v n="$NODES" -v base="$BASE_PORT" 'BEGIN {
+	awk -v n="$NODES" -v r="$REPLICAS" -v base="$BASE_PORT" 'BEGIN {
 		per = 16384 / n; cursor = 0; first = 0
 		print "# Written by scripts/cluster.sh: name, address, slots"
 		for (i = 0; i < n; i++) {
@@ -45,6 +49,8 @@ write_conf() {
 			printf "node%d  127.0.0.1:%d  %d-%d\n", i + 1, base + i, first, last
 			first = last + 1; cursor += per
 		}
+		for (i = n; i < n * (1 + r); i++)
+			printf "node%d  127.0.0.1:%d  replicaof node%d\n", i + 1, base + i, i % n + 1
 	}' >"$DIR/cluster.conf"
 }
 

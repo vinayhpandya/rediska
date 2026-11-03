@@ -70,6 +70,13 @@ func TestParseLayoutErrors(t *testing.T) {
 		"duplicate name": {"node1 127.0.0.1:7001 0-10\nnode1 127.0.0.1:7002 11-20", 7001},
 		"self not found": {"node1 127.0.0.1:7001 0-100", 9999},
 		"empty":          {"# nothing here\n", 7001},
+
+		"replica of an unknown node": {"node1 127.0.0.1:7001 0-16383\nnode2 127.0.0.1:7002 replicaof node9", 7001},
+		"replica of itself":          {"node1 127.0.0.1:7001 0-16383\nnode2 127.0.0.1:7002 replicaof node2", 7001},
+		"replica of a replica": {"node1 127.0.0.1:7001 0-16383\nnode2 127.0.0.1:7002 replicaof node1\n" +
+			"node3 127.0.0.1:7003 replicaof node2", 7001},
+		"replica with slots too":   {"node1 127.0.0.1:7001 0-100\nnode2 127.0.0.1:7002 replicaof node1 200-300", 7001},
+		"replicaof with no master": {"node1 127.0.0.1:7001 0-100\nnode2 127.0.0.1:7002 replicaof", 7001},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -77,6 +84,63 @@ func TestParseLayoutErrors(t *testing.T) {
 				t.Fatal("expected an error")
 			}
 		})
+	}
+}
+
+const replicaConf = `
+node4  127.0.0.1:7004  replicaof node1   # a replica may come before its master
+node1  127.0.0.1:7001  0-8191
+node2  127.0.0.1:7002  8192-16383
+node5  127.0.0.1:7005  REPLICAOF node2
+`
+
+func TestParseReplicas(t *testing.T) {
+	l, err := ParseLayout(strings.NewReader(replicaConf), 7004)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]*Node{}
+	for _, n := range l.Nodes {
+		byName[n.Name] = n
+	}
+	if l.Self != byName["node4"] {
+		t.Fatalf("self = %s, want node4", l.Self.Name)
+	}
+	for replica, master := range map[string]string{"node4": "node1", "node5": "node2"} {
+		n := byName[replica]
+		if !n.IsReplica() || n.MasterID != byName[master].ID {
+			t.Errorf("%s: MasterID = %q, want %s's ID", replica, n.MasterID, master)
+		}
+		if len(n.Slots) != 0 {
+			t.Errorf("%s: a replica owns slots %v", replica, n.Slots)
+		}
+	}
+	for _, master := range []string{"node1", "node2"} {
+		if byName[master].IsReplica() {
+			t.Errorf("%s should be a master", master)
+		}
+	}
+	if got := ownerName(l, 0); got != "node1" {
+		t.Errorf("slot 0 is owned by %q, want node1", got)
+	}
+}
+
+// Like slots, other nodes' roles are learned from those nodes over the
+// bus; cluster.conf only decides our own.
+func TestForgetOthersRoles(t *testing.T) {
+	l, err := ParseLayout(strings.NewReader(replicaConf), 7005) // we are node5
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.ForgetOthersRoles()
+	for _, n := range l.Nodes {
+		if n == l.Self {
+			if !n.IsReplica() {
+				t.Error("our own role was forgotten")
+			}
+		} else if n.IsReplica() {
+			t.Errorf("%s still has a role from the file", n.Name)
+		}
 	}
 }
 

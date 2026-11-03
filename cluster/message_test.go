@@ -37,6 +37,10 @@ func TestMessageRoundTrip(t *testing.T) {
 			Type: "MEET", ID: "abc", Name: "node1", Addr: "127.0.0.1:7001",
 			Slots: []SlotRange{{0, 5460}},
 		}},
+		{"from a replica", Message{
+			Type: "PING", ID: "abc", Name: "node4", Addr: "127.0.0.1:7004",
+			Master: "0123456789abcdef0123456789abcdef01234567",
+		}},
 		{"everything set", Message{
 			Type: "PONG", ID: "abc", Name: "node1", Addr: "127.0.0.1:7001", Flags: 3,
 			Slots: []SlotRange{{0, 0}, {5, 5460}, {16383, 16383}},
@@ -59,7 +63,7 @@ func TestMessageRoundTrip(t *testing.T) {
 // The hand-typed PING in message.go's comment and docs/cluster.md must
 // stay valid.
 func TestHandTypedPing(t *testing.T) {
-	raw := "*7\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n"
+	raw := "*8\r\n$4\r\nPING\r\n$1\r\nx\r\n$4\r\ntest\r\n$14\r\n127.0.0.1:9999\r\n:0\r\n*0\r\n*0\r\n$0\r\n\r\n"
 	v, err := core.Decode(bufio.NewReader(strings.NewReader(raw)))
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +72,7 @@ func TestHandTypedPing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Type != "PING" || m.ID != "x" || m.Name != "test" || m.Addr != "127.0.0.1:9999" {
+	if m.Type != "PING" || m.ID != "x" || m.Name != "test" || m.Addr != "127.0.0.1:9999" || m.Master != "" {
 		t.Fatalf("got %+v", m)
 	}
 }
@@ -79,6 +83,7 @@ func TestDecodeMessageRejects(t *testing.T) {
 		return []any{"PING", "id", "name", "127.0.0.1:7001", int64(0),
 			[]any{int64(0), int64(100)},
 			[]any{[]any{"id2", "n2", "127.0.0.1:7002", int64(0), int64(0), int64(0)}},
+			"", // master: none
 		}
 	}
 	tests := []struct {
@@ -88,6 +93,8 @@ func TestDecodeMessageRejects(t *testing.T) {
 		{"not an array", func(m []any) any { return "PING" }},
 		{"old 4-item format", func(m []any) any { return []any{"PING", "id", "name", "addr"} }},
 		{"too many items", func(m []any) any { return append(m, "extra") }},
+		{"old 7-item format, without master", func(m []any) any { return m[:7] }},
+		{"master not a string", func(m []any) any { m[7] = int64(1); return m }},
 		{"unknown type", func(m []any) any { m[0] = "HELLO"; return m }},
 		{"id not a string", func(m []any) any { m[1] = int64(7); return m }},
 		{"flags not an integer", func(m []any) any { m[4] = "0"; return m }},
