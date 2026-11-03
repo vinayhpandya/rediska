@@ -194,11 +194,12 @@ func (b *Bus) Peers() []*Peer {
 func (b *Bus) Peer(id string) *Peer { return b.peers[id] }
 
 // msg builds a message from this node to the node with ID to: our header
-// (with our own slots), and gossip picked for that receiver (gossip.go).
+// (our own slots, and our master if we're a replica), and gossip picked
+// for that receiver (gossip.go).
 func (b *Bus) msg(typ, to string) Message {
 	s := b.layout.Self
 	return Message{Type: typ, ID: s.ID, Name: s.Name, Addr: s.Addr, Slots: s.Slots,
-		Gossip: b.pickGossip(to)}
+		Gossip: b.pickGossip(to), Master: s.MasterID}
 }
 
 // ======================================================= network goroutines

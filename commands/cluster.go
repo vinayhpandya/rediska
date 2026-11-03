@@ -136,26 +136,32 @@ func clusterMeet(host, portArg string) []byte {
 //
 // Nodes come from the layout, which the cluster bus keeps up to date as
 // nodes meet. A node that hasn't answered us yet is flagged "handshake".
+// A replica is flagged "slave", and <master> is its master's ID ("-" for
+// a master).
 // Each node's epoch is still its position in the list: real epochs come
 // with slot migration.
 func clusterNodes(l *cluster.Layout) string {
 	var b strings.Builder
 	for i, n := range l.Nodes {
 		host, port := splitAddr(n.Addr)
-		flags := "master"
+		role, master := "master", "-"
+		if n.IsReplica() {
+			role, master = "slave", n.MasterID // Redis's words, which clients expect
+		}
+		flags := role
 		switch {
 		case n == l.Self:
-			flags = "myself,master"
+			flags = "myself," + role
 		case isHandshake(n):
 			flags = "handshake"
 		case health(n) == "fail":
-			flags = "master,fail"
+			flags = role + ",fail"
 		case health(n) == "pfail":
-			flags = "master,fail?"
+			flags = role + ",fail?"
 		}
 		pingSent, pongRecv, link := nodeLinkInfo(l, n)
-		fmt.Fprintf(&b, "%s %s:%d@%d %s - %d %d %d %s",
-			n.ID, host, port, cluster.BusPort(port), flags, pingSent, pongRecv, i+1, link)
+		fmt.Fprintf(&b, "%s %s:%d@%d %s %s %d %d %d %s",
+			n.ID, host, port, cluster.BusPort(port), flags, master, pingSent, pongRecv, i+1, link)
 		for _, r := range n.Slots {
 			if r.Start == r.End {
 				fmt.Fprintf(&b, " %d", r.Start)
