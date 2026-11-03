@@ -19,6 +19,14 @@ func TestReplicaSync(t *testing.T) {
 	const node4 = 3
 	pairs := [][2]int{{node1, 3}, {node2, 4}, {node3, 5}} // master, replica
 
+	// Before any data exists: an empty master still has to answer SYNC, so
+	// every replica's link comes up.
+	for _, p := range pairs {
+		c.waitFor(t, p[1], "the link to an empty master to come up", func(cl *client) bool {
+			return strings.Contains(cl.do("INFO", "replication"), "master_link_status:up")
+		})
+	}
+
 	for i := range 300 {
 		c.setOnOwner(t, fmt.Sprintf("key:%d", i), fmt.Sprint(i))
 	}
