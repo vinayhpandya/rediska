@@ -1,8 +1,10 @@
 // Package replication copies a master's data to its replicas.
 //
-// A replica connects to its master's client port and sends SYNC. The
-// master then sends it two things over that connection, in one ordered
-// stream of commands:
+// A replica connects to its master's client port and sends PSYNC. If it
+// was connected before and the master still has every change it missed in
+// its backlog (backlog.go), the master sends just those changes, then new
+// ones as they happen. Otherwise the master sends it two things, in one
+// ordered stream of commands:
 //
 //   - a snapshot: every key, as the command that recreates it (see
 //     store.SlotCommands), copied one slot at a time, and
@@ -20,9 +22,13 @@ package replication
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -78,17 +84,61 @@ type Entry struct {
 type Master struct {
 	replicas map[*replica]struct{}
 
+	// replID names this master's history of changes, and offset is the
+	// offset of the newest change it recorded. A replica that comes back
+	// with the same replID and an offset still in the backlog can carry on
+	// from there. replID is new every time the process starts, because the
+	// backlog doesn't survive a restart.
+	replID  string
+	offset  int64
+	backlog *backlog // nil until the first replica connects
+
+	// BacklogSize is how many bytes of recent changes the backlog keeps
+	// (--repl-backlog-size). Set it before any replica connects.
+	BacklogSize int
+
+	fullSyncs, partialSyncs int // for INFO replication
+
 	// OnChange, if set, is called on the dispatch worker whenever a
 	// replica connects or goes away.
 	OnChange func()
 }
 
+// DefaultBacklogSize is the backlog size if --repl-backlog-size isn't
+// given: 1 MB, as in Redis.
+const DefaultBacklogSize = 1 << 20
+
 // Default is this node's Master.
 var Default = NewMaster()
 
-// NewMaster returns a Master with no replicas.
+// NewMaster returns a Master with no replicas and a new replication ID.
 func NewMaster() *Master {
-	return &Master{replicas: map[*replica]struct{}{}}
+	id := make([]byte, 20)
+	rand.Read(id)
+	return &Master{
+		replicas:    map[*replica]struct{}{},
+		replID:      hex.EncodeToString(id),
+		BacklogSize: DefaultBacklogSize,
+	}
+}
+
+// ReplID, Offset, FullSyncs and PartialSyncs are for INFO replication.
+// Worker only.
+func (m *Master) ReplID() string    { return m.replID }
+func (m *Master) Offset() int64     { return m.offset }
+func (m *Master) FullSyncs() int    { return m.fullSyncs }
+func (m *Master) PartialSyncs() int { return m.partialSyncs }
+
+// Active reports whether changes need recording for replicas: from the
+// moment the first replica connects, every change goes into the backlog,
+// even while no replica is connected, because that's exactly when one is
+// missing changes. Worker only.
+func (m *Master) Active() bool { return m.backlog != nil }
+
+// record gives a change the next offset and keeps it in the backlog.
+func (m *Master) record(data []byte) {
+	m.offset++
+	m.backlog.add(m.offset, data)
 }
 
 // replica is one connected replica, as the master sees it.
@@ -113,8 +163,10 @@ func (r *replica) close() { r.closeOnce.Do(func() { close(r.closed) }) }
 func (m *Master) Count() int { return len(m.replicas) }
 
 func (m *Master) add(r *replica) {
+	if m.backlog == nil {
+		m.backlog = newBacklog(m.BacklogSize)
+	}
 	m.replicas[r] = struct{}{}
-	log.Printf("replication: replica %s connected; copying data", r.addr)
 	m.changed()
 }
 
@@ -160,44 +212,66 @@ func (r *replica) take(b []byte) []byte {
 	return b
 }
 
-// Feed sends one change to every replica that already has e's slot.
-// Worker only.
+// Feed records one change in the backlog, and sends it to every replica
+// that already has e's slot. Worker only.
 func (m *Master) Feed(e Entry) {
-	var b []byte
+	if !m.Active() {
+		return
+	}
+	b := core.EncodeArray(e.Args)
+	m.record(b)
 	for r := range m.replicas {
 		if e.Slot < r.cursor {
-			if b == nil {
-				b = core.EncodeArray(e.Args)
-			}
 			m.send(r, b)
 		}
 	}
 }
 
-// FeedTransaction sends the changes of one MULTI/EXEC to every replica,
-// wrapped in MULTI and EXEC so the replica applies them all at once. Each
-// replica gets only the entries whose slots it already has; one that has
-// none of them gets nothing. Worker only.
+// FeedTransaction records the changes of one MULTI/EXEC in the backlog as
+// one change, and sends them to every replica, wrapped in MULTI and EXEC
+// so the replica applies them all at once. A replica still being copied
+// gets only the entries whose slots it already has; one that has none of
+// them gets nothing. Worker only.
 func (m *Master) FeedTransaction(entries []Entry) {
+	if !m.Active() {
+		return
+	}
+	full := transaction(entries, func(Entry) bool { return true })
+	m.record(full)
 	for r := range m.replicas {
-		var b []byte
-		for _, e := range entries {
-			if e.Slot < r.cursor {
-				b = append(b, core.EncodeArray(e.Args)...)
-			}
-		}
-		if b != nil {
-			block := core.EncodeArray([]string{"MULTI"})
-			block = append(block, b...)
-			block = append(block, core.EncodeArray([]string{"EXEC"})...)
-			m.send(r, block)
+		if r.cursor == cluster.NumSlots {
+			m.send(r, full)
+		} else if b := transaction(entries, func(e Entry) bool { return e.Slot < r.cursor }); b != nil {
+			m.send(r, b)
 		}
 	}
 }
 
+// transaction encodes the entries that keep accepts as one MULTI/EXEC
+// block, or returns nil if it accepts none.
+func transaction(entries []Entry, keep func(Entry) bool) []byte {
+	var b []byte
+	for _, e := range entries {
+		if keep(e) {
+			b = append(b, core.EncodeArray(e.Args)...)
+		}
+	}
+	if b == nil {
+		return nil
+	}
+	block := core.EncodeArray([]string{"MULTI"})
+	block = append(block, b...)
+	return append(block, core.EncodeArray([]string{"EXEC"})...)
+}
+
 // copyNext copies the next slots to r: whole slots, until about BatchKeys
 // keys or BatchBytes bytes have been copied, or every slot has. It reports
-// whether the copy is finished. Worker only.
+// whether the copy is finished.
+//
+// When it is, it also sends _SYNCED <replID> <offset>: from here on the
+// replica has everything up to offset, and counts each change it applies,
+// so that if it disconnects it can ask for just what it missed. Before the
+// copy is finished, its data doesn't match any one offset. Worker only.
 func (m *Master) copyNext(r *replica) (finished bool) {
 	if _, ok := m.replicas[r]; !ok {
 		return true // dropped meanwhile
@@ -211,24 +285,89 @@ func (m *Master) copyNext(r *replica) (finished bool) {
 		}
 		r.cursor++ // from now on, changes to this slot are sent to r
 	}
+	finished = r.cursor == cluster.NumSlots
+	if finished {
+		b = append(b, core.EncodeArray([]string{"_SYNCED", m.replID, strconv.FormatInt(m.offset, 10)})...)
+	}
 	if b != nil {
 		m.send(r, b)
 	}
-	if r.cursor == cluster.NumSlots {
+	if finished {
 		log.Printf("replication: replica %s has all the data; sending changes as they happen", r.addr)
-		return true
 	}
-	return false
+	return finished
 }
 
-// Serve feeds the replica on conn, which has just sent SYNC, until it
-// disconnects or ctx is cancelled. It runs on the connection's goroutine;
-// run must run a function on the dispatch worker and wait for it to
-// finish, returning false if the server is shutting down.
-func (m *Master) Serve(ctx context.Context, conn net.Conn, run func(func()) bool) {
+// missedSince returns the changes a replica that has everything up to
+// offset in history replID is missing. why is "" if the backlog has them
+// all, and otherwise says why the replica needs a full copy. Worker only.
+func (m *Master) missedSince(replID string, offset int64) (missed []byte, why string) {
+	switch {
+	case replID == "":
+		return nil, "it has no data yet"
+	case replID != m.replID:
+		return nil, "its data came from another master, or from before this one restarted"
+	case offset > m.offset:
+		return nil, fmt.Sprintf("it claims change %d, but this master is only at %d", offset, m.offset)
+	}
+	missed, ok := m.backlog.since(offset, m.offset)
+	if !ok {
+		return nil, fmt.Sprintf("it's at change %d, and the backlog no longer goes back that far", offset)
+	}
+	return missed, ""
+}
+
+// ParsePSync reads PSYNC's arguments: the replication ID and offset the
+// replica already has, or "?" and -1 if it has nothing. It returns "" for
+// "?".
+func ParsePSync(args []string) (replID string, offset int64, err error) {
+	if len(args) != 2 {
+		return "", 0, fmt.Errorf("ERR wrong number of arguments for 'psync' command")
+	}
+	offset, err = strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return "", 0, fmt.Errorf("ERR value is not an integer or out of range")
+	}
+	if args[0] != "?" {
+		replID = args[0]
+	}
+	return replID, offset, nil
+}
+
+// Serve feeds the replica on conn, which has just sent PSYNC replID
+// offset (see ParsePSync), until it disconnects or ctx is cancelled. It
+// runs on the connection's goroutine; run must run a function on the
+// dispatch worker and wait for it to finish, returning false if the server
+// is shutting down.
+//
+// If the backlog has every change the replica missed, Serve answers
+// +CONTINUE and sends just those; otherwise it answers +FULLRESYNC and
+// copies everything.
+func (m *Master) Serve(ctx context.Context, conn net.Conn, run func(func()) bool, replID string, offset int64) {
 	r := newReplica(conn.RemoteAddr().String())
 	defer conn.Close()
-	if !run(func() { m.add(r) }) {
+
+	// Deciding, registering the replica and queueing what it missed happen
+	// in one worker step, so no change can fall between "what you missed"
+	// and "what's new".
+	full := true
+	if !run(func() {
+		m.add(r)
+		missed, why := m.missedSince(replID, offset)
+		if why != "" {
+			m.fullSyncs++
+			log.Printf("replication: full resync for replica %s: %s", r.addr, why)
+			return
+		}
+		full = false
+		m.partialSyncs++
+		r.cursor = cluster.NumSlots // it has every slot already
+		log.Printf("replication: partial resync for replica %s: sending the %d changes it missed",
+			r.addr, m.offset-offset)
+		if missed != nil {
+			m.send(r, missed)
+		}
+	}) {
 		return
 	}
 	defer run(func() {
@@ -238,20 +377,24 @@ func (m *Master) Serve(ctx context.Context, conn net.Conn, run func(func()) bool
 		}
 	})
 
-	// A replica never sends anything after SYNC, so a read only ends when
+	// A replica never sends anything after PSYNC, so a read only ends when
 	// it hangs up. Notice that, rather than wait for a write to fail.
 	go func() {
 		io.Copy(io.Discard, conn)
 		r.close()
 	}()
 
-	// Answer SYNC right away, even if there's nothing to copy: the replica
-	// waits for this +OK before it counts itself as connected.
+	// Answer right away, even if there's nothing to send: the replica waits
+	// for this before it counts itself as connected.
+	answer := "CONTINUE"
+	if full {
+		answer = "FULLRESYNC"
+	}
 	w := bufio.NewWriter(conn)
-	if !write(conn, w, core.EncodeSimpleString("OK"), r) {
+	if !write(conn, w, core.EncodeSimpleString(answer), r) {
 		return
 	}
-	copying := true
+	copying := full
 	for {
 		// While copying, ask for the next slots whenever the queue runs low.
 		if copying && len(r.out) < lowWater && r.queued.Load() < lowWaterBytes {

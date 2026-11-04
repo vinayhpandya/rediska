@@ -406,11 +406,16 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 			}
 			continue
 		}
-		// SYNC means this connection is a replica: hand it over to
+		// PSYNC means this connection is a replica: hand it over to
 		// replication for good. (Not inside MULTI, where it's queued and
 		// rejected like any other unknown command.)
-		if command.Name == "SYNC" && !tx.isMulti {
-			if msg := syncRefusal(); msg != "" {
+		if command.Name == "PSYNC" && !tx.isMulti {
+			replID, offset, err := replication.ParsePSync(command.Args)
+			msg := syncRefusal()
+			if msg == "" && err != nil {
+				msg = err.Error()
+			}
+			if msg != "" {
 				if _, err := writer.Write(core.EncodeError(msg)); err != nil {
 					return
 				}
@@ -422,7 +427,7 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 			if err := writer.Flush(); err != nil {
 				return
 			}
-			replication.Default.Serve(ctx, conn, runOnWorker)
+			replication.Default.Serve(ctx, conn, runOnWorker, replID, offset)
 			return
 		}
 
@@ -520,9 +525,9 @@ func handleConnection(ctx context.Context, conn net.Conn, commandCh chan<- Comma
 func syncRefusal() string {
 	switch l := cluster.Current; {
 	case l == nil:
-		return "ERR SYNC needs cluster mode"
+		return "ERR PSYNC needs cluster mode"
 	case l.Self.IsReplica():
-		return "ERR this node is a replica; SYNC with its master instead"
+		return "ERR this node is a replica; PSYNC with its master instead"
 	}
 	return ""
 }
