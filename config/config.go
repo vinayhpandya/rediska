@@ -43,4 +43,8 @@ var (
 	// ClusterNodeTimeout is the time after which nodes mark a particular
 	// as unreachable, this is required for PFAIL and FAIL
 	ClusterNodeTimeout int // ms, --cluster-node-timeout, default 15000
+	// ReplBacklogSize is how many bytes of recent changes a master keeps,
+	// so a replica that reconnects can get just the changes it missed
+	// (--repl-backlog-size, default 1 MB, as in Redis).
+	ReplBacklogSize int
 )
