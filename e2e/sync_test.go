@@ -19,7 +19,7 @@ func TestReplicaSync(t *testing.T) {
 	const node4 = 3
 	pairs := [][2]int{{node1, 3}, {node2, 4}, {node3, 5}} // master, replica
 
-	// Before any data exists: an empty master still has to answer SYNC, so
+	// Before any data exists: an empty master still has to answer PSYNC, so
 	// every replica's link comes up.
 	for _, p := range pairs {
 		c.waitFor(t, p[1], "the link to an empty master to come up", func(cl *client) bool {
@@ -53,9 +53,9 @@ func TestReplicaSync(t *testing.T) {
 		}
 	})
 
-	t.Run("a replica can't serve SYNC", func(t *testing.T) {
-		expect(t, "SYNC on node4", c.dial(t, node4).do("SYNC"),
-			"ERR:ERR this node is a replica; SYNC with its master instead")
+	t.Run("a replica can't serve PSYNC", func(t *testing.T) {
+		expect(t, "PSYNC on node4", c.dial(t, node4).do("PSYNC", "?", "-1"),
+			"ERR:ERR this node is a replica; PSYNC with its master instead")
 	})
 
 	t.Run("a restarted replica copies everything again", func(t *testing.T) {
