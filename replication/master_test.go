@@ -136,8 +136,9 @@ func TestCopyGoesSlotBySlot(t *testing.T) {
 	if !m.copyNext(r) {
 		t.Fatal("not finished after copying every slot")
 	}
-	if got := queued(t, r); len(got) != 1 || got[0][1] != keyB {
-		t.Fatalf("second step sent %q, want visits", got)
+	// visits, then the marker saying the copy is finished.
+	if got := queued(t, r); len(got) != 2 || got[0][1] != keyB || got[1][0] != "_SYNCED" {
+		t.Fatalf("second step sent %q, want visits and _SYNCED", got)
 	}
 }
 
@@ -196,7 +197,7 @@ func TestCopyStepStopsAtBatchBytes(t *testing.T) {
 	if r.queued.Load() != 0 {
 		t.Fatalf("%d bytes still counted as queued after reading them all", r.queued.Load())
 	}
-	if !m.copyNext(r) || len(queued(t, r)) != 1 {
+	if !m.copyNext(r) || len(queued(t, r)) != 2 { // visits, and _SYNCED
 		t.Fatal("the second step should copy visits and finish")
 	}
 }
