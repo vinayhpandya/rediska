@@ -114,9 +114,6 @@ func writeEntry(args []string) {
 			fmt.Printf("AOF write error: %v\n", err)
 		}
 	}
-	if replication.Default.Count() > 0 {
-		replication.Default.Feed(replication.Entry{Slot: entrySlot(args), Args: args})
-	}
 	if replication.Default.Active() {
 		replication.Default.Feed(replication.Entry{Slot: entrySlot(args), Args: args})
 	}
@@ -261,13 +258,6 @@ func DispatchBatch(cmd []*Command) []byte {
 			if err := aof.WriteTransaction(txEntries); err != nil {
 				fmt.Printf("AOF write error: %v\n", err)
 			}
-		}
-		if replication.Default.Count() > 0 {
-			entries := make([]replication.Entry, len(txEntries))
-			for i, args := range txEntries {
-				entries[i] = replication.Entry{Slot: entrySlot(args), Args: args}
-			}
-			replication.Default.FeedTransaction(entries)
 		}
 		if replication.Default.Active() {
 			entries := make([]replication.Entry, len(txEntries))
