@@ -853,10 +853,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Constants
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#variables" class="md-nav__link">
     <span class="md-ellipsis">
       
         Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#func-parsepsync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func ParsePSync
       
     </span>
   </a>
@@ -891,6 +913,28 @@
     <span class="md-ellipsis">
       
         func NewLink
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-link-offset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Link) Offset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-link-reconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Link) Reconnect
       
     </span>
   </a>
@@ -948,6 +992,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#func-master-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Master) Active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#func-master-count" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -974,6 +1029,50 @@
     <span class="md-ellipsis">
       
         func (*Master) FeedTransaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-master-fullsyncs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Master) FullSyncs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-master-offset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Master) Offset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-master-partialsyncs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Master) PartialSyncs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#func-master-replid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        func (*Master) ReplID
       
     </span>
   </a>
@@ -1022,7 +1121,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/vinayhpandya/rediska/replication"</span>
 </code></pre></div>
 <p>Package replication copies a master's data to its replicas.</p>
-<p>A replica connects to its master's client port and sends SYNC. The master then sends it two things over that connection, in one ordered stream of commands:</p>
+<p>A replica connects to its master's client port and sends PSYNC. If it was connected before and the master still has every change it missed in its backlog (backlog.go), the master sends just those changes, then new ones as they happen. Otherwise the master sends it two things, in one ordered stream of commands:</p>
 <ul>
 <li>a snapshot: every key, as the command that recreates it (see store.SlotCommands), copied one slot at a time, and</li>
 <li>every change made since, as the same entries the AOF records.</li>
@@ -1030,100 +1129,157 @@
 <p>The snapshot is copied a few slots at a time, between client commands, so clients never wait for the whole dataset to be copied. Copying and changes stay consistent through one rule: a change is sent to a replica only if its slot has already been copied to that replica. A change to a slot that hasn't been copied yet is skipped, because the slot will be copied later with the change already in it. This works because in cluster mode every command's keys are in one slot.</p>
 <h2 id="index">Index<a class="headerlink" href="#index" title="Permanent link">&para;</a></h2>
 <ul>
+<li><a href="#constants">Constants</a></li>
 <li><a href="#variables">Variables</a></li>
+<li><a href="#ParsePSync">func ParsePSync(args []string) (replID string, offset int64, err error)</a></li>
 <li><a href="#Entry">type Entry</a></li>
 <li><a href="#Link">type Link</a></li>
 <li><a href="#NewLink">func NewLink(masterAddr string) *Link</a></li>
+<li><a href="#Link.Offset">func (l *Link) Offset() int64</a></li>
+<li><a href="#Link.Reconnect">func (l *Link) Reconnect()</a></li>
 <li><a href="#Link.Run">func (l *Link) Run(ctx context.Context, flush func() bool, apply func([][]string) bool)</a></li>
 <li><a href="#Link.Up">func (l *Link) Up() bool</a></li>
 <li><a href="#Master">type Master</a></li>
 <li><a href="#NewMaster">func NewMaster() *Master</a></li>
+<li><a href="#Master.Active">func (m *Master) Active() bool</a></li>
 <li><a href="#Master.Count">func (m *Master) Count() int</a></li>
 <li><a href="#Master.Feed">func (m *Master) Feed(e Entry)</a></li>
 <li><a href="#Master.FeedTransaction">func (m *Master) FeedTransaction(entries []Entry)</a></li>
-<li><a href="#Master.Serve">func (m *Master) Serve(ctx context.Context, conn net.Conn, run func(func()) bool)</a></li>
+<li><a href="#Master.FullSyncs">func (m *Master) FullSyncs() int</a></li>
+<li><a href="#Master.Offset">func (m *Master) Offset() int64</a></li>
+<li><a href="#Master.PartialSyncs">func (m *Master) PartialSyncs() int</a></li>
+<li><a href="#Master.ReplID">func (m *Master) ReplID() string</a></li>
+<li><a href="#Master.Serve">func (m *Master) Serve(ctx context.Context, conn net.Conn, run func(func()) bool, replID string, offset int64)</a></li>
 </ul>
+<h2 id="constants">Constants<a class="headerlink" href="#constants" title="Permanent link">&para;</a></h2>
+<p><a name="DefaultBacklogSize"></a>DefaultBacklogSize is the backlog size if --repl-backlog-size isn't given: 1 MB, as in Redis.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">DefaultBacklogSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">20</span>
+</code></pre></div>
 <h2 id="variables">Variables<a class="headerlink" href="#variables" title="Permanent link">&para;</a></h2>
 <p><a name="BatchKeys"></a>BatchKeys and BatchBytes bound one copying step, so that it never holds up clients for long: a step stops once it has copied about BatchKeys keys or BatchBytes bytes, whichever comes first. Bytes matter because one 10 MB value is one key, but far from a cheap one. A step always copies whole slots (see the package comment), so a slot bigger than this is still copied in one step. Variables so tests can make copying take many steps.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">var</span><span class="w"> </span><span class="p">(</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">BatchKeys</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">BatchBytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">20</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">var</span><span class="w"> </span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">BatchKeys</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">BatchBytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">20</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
 </code></pre></div>
 <p><a name="Default"></a>Default is this node's Master.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">Default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">NewMaster</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">Default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">NewMaster</span><span class="p">()</span>
 </code></pre></div>
+<p><a name="RetryInterval"></a>RetryInterval is how long a replica waits before connecting to its master again, after it couldn't connect or the connection dropped.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">RetryInterval</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="w"> </span><span class="c1">// a variable so tests can shorten it</span>
+</code></pre></div>
+<p><a name="ParsePSync"></a></p>
+<h2 id="func-parsepsync">func ParsePSync<a class="headerlink" href="#func-parsepsync" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">ParsePSync</span><span class="p">(</span><span class="nx">args</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">replID</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">offset</span><span class="w"> </span><span class="kt">int64</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+</code></pre></div>
+<p>ParsePSync reads PSYNC's arguments: the replication ID and offset the replica already has, or "?" and -1 if it has nothing. It returns "" for "?".</p>
 <p><a name="Entry"></a></p>
 <h2 id="type-entry">type Entry<a class="headerlink" href="#type-entry" title="Permanent link">&para;</a></h2>
 <p>Entry is one change to send to replicas: a command, and the slot its keys are in.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Entry</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">Slot</span><span class="w"> </span><span class="kt">int</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">Args</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Entry</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="nx">Slot</span><span class="w"> </span><span class="kt">int</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nx">Args</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Link"></a></p>
 <h2 id="type-link">type Link<a class="headerlink" href="#type-link" title="Permanent link">&para;</a></h2>
 <p>Link is a replica's connection to its master.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Link</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="nx">MasterAddr</span><span class="w"> </span><span class="kt">string</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Link</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">    </span><span class="nx">MasterAddr</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="Upstream"></a>Upstream is this node's link to its master, or nil if it's a master. The server sets it at startup, before any goroutine reads it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">Upstream</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">Upstream</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span>
 </code></pre></div>
 <p><a name="NewLink"></a></p>
 <h3 id="func-newlink">func NewLink<a class="headerlink" href="#func-newlink" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">NewLink</span><span class="p">(</span><span class="nx">masterAddr</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">NewLink</span><span class="p">(</span><span class="nx">masterAddr</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span>
 </code></pre></div>
 <p>NewLink returns a link to the master at masterAddr, not connected yet.</p>
+<p><a name="Link.Offset"></a></p>
+<h3 id="func-link-offset">func (*Link) Offset<a class="headerlink" href="#func-link-offset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span><span class="p">)</span><span class="w"> </span><span class="nx">Offset</span><span class="p">()</span><span class="w"> </span><span class="kt">int64</span>
+</code></pre></div>
+<p>Offset is the offset of the last change this replica applied, or -1 if it has nothing it can resume from yet. INFO replication shows it as slave_repl_offset. Safe to call from any goroutine.</p>
+<p><a name="Link.Reconnect"></a></p>
+<h3 id="func-link-reconnect">func (*Link) Reconnect<a class="headerlink" href="#func-link-reconnect" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span><span class="p">)</span><span class="w"> </span><span class="nx">Reconnect</span><span class="p">()</span>
+</code></pre></div>
+<p>Reconnect drops the connection to the master, as if the network had failed. The replica connects again after RetryInterval, and asks for just the changes it missed. DEBUG RECONNECT uses it, for testing. Safe to call from any goroutine.</p>
 <p><a name="Link.Run"></a></p>
 <h3 id="func-link-run">func (*Link) Run<a class="headerlink" href="#func-link-run" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span><span class="p">)</span><span class="w"> </span><span class="nx">Run</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">flush</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">apply</span><span class="w"> </span><span class="kd">func</span><span class="p">([][]</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span><span class="p">)</span><span class="w"> </span><span class="nx">Run</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">flush</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">apply</span><span class="w"> </span><span class="kd">func</span><span class="p">([][]</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
 </code></pre></div>
-<p>Run keeps this node a copy of the master until ctx is cancelled. Each time it connects, it sends SYNC, then flush must clear this node's data, and apply must apply the commands that follow, in order: one command at a time, or a whole MULTI/EXEC block at once. flush and apply hand their work to the dispatch worker; they return false if the server is shutting down.</p>
-<p>Every connection starts from an empty store and a full copy, so if the connection drops, the replica simply connects again.</p>
+<p>Run keeps this node a copy of the master until ctx is cancelled. Each time it connects, it sends PSYNC with what it already has. If the master answers +CONTINUE, the replica keeps its data and applies the changes that follow. If it answers +FULLRESYNC, flush must clear this node's data first. apply must apply commands in order: one at a time, or a whole MULTI/EXEC block at once. flush and apply hand their work to the dispatch worker; they return false if the server is shutting down.</p>
 <p><a name="Link.Up"></a></p>
 <h3 id="func-link-up">func (*Link) Up<a class="headerlink" href="#func-link-up" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span><span class="p">)</span><span class="w"> </span><span class="nx">Up</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">Link</span><span class="p">)</span><span class="w"> </span><span class="nx">Up</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
 </code></pre></div>
 <p>Up reports whether the replica is connected to its master and receiving data. INFO replication shows it as master_link_status. Safe to call from any goroutine.</p>
 <p><a name="Master"></a></p>
 <h2 id="type-master">type Master<a class="headerlink" href="#type-master" title="Permanent link">&para;</a></h2>
 <p>Master keeps track of the replicas connected to this node. Everything except a replica's queue belongs to the dispatch worker: the methods below must only be called there, except Serve.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Master</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="c1">// OnChange, if set, is called on the dispatch worker whenever a</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="c1">// replica connects or goes away.</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nx">OnChange</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Master</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="c1">// BacklogSize is how many bytes of recent changes the backlog keeps</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="c1">// (--repl-backlog-size). Set it before any replica connects.</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nx">BacklogSize</span><span class="w"> </span><span class="kt">int</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="c1">// OnChange, if set, is called on the dispatch worker whenever a</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="c1">// replica connects or goes away.</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="nx">OnChange</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">    </span><span class="c1">// contains filtered or unexported fields</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="p">}</span>
 </code></pre></div>
 <p><a name="NewMaster"></a></p>
 <h3 id="func-newmaster">func NewMaster<a class="headerlink" href="#func-newmaster" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">NewMaster</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">NewMaster</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span>
 </code></pre></div>
-<p>NewMaster returns a Master with no replicas.</p>
+<p>NewMaster returns a Master with no replicas and a new replication ID.</p>
+<p><a name="Master.Active"></a></p>
+<h3 id="func-master-active">func (*Master) Active<a class="headerlink" href="#func-master-active" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Active</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+</code></pre></div>
+<p>Active reports whether changes need recording for replicas: from the moment the first replica connects, every change goes into the backlog, even while no replica is connected, because that's exactly when one is missing changes. Worker only.</p>
 <p><a name="Master.Count"></a></p>
 <h3 id="func-master-count">func (*Master) Count<a class="headerlink" href="#func-master-count" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Count</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Count</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
 </code></pre></div>
 <p>Count returns how many replicas are connected. Worker only.</p>
 <p><a name="Master.Feed"></a></p>
 <h3 id="func-master-feed">func (*Master) Feed<a class="headerlink" href="#func-master-feed" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Feed</span><span class="p">(</span><span class="nx">e</span><span class="w"> </span><span class="nx">Entry</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Feed</span><span class="p">(</span><span class="nx">e</span><span class="w"> </span><span class="nx">Entry</span><span class="p">)</span>
 </code></pre></div>
-<p>Feed sends one change to every replica that already has e's slot. Worker only.</p>
+<p>Feed records one change in the backlog, and sends it to every replica that already has e's slot. Worker only.</p>
 <p><a name="Master.FeedTransaction"></a></p>
 <h3 id="func-master-feedtransaction">func (*Master) FeedTransaction<a class="headerlink" href="#func-master-feedtransaction" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">FeedTransaction</span><span class="p">(</span><span class="nx">entries</span><span class="w"> </span><span class="p">[]</span><span class="nx">Entry</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">FeedTransaction</span><span class="p">(</span><span class="nx">entries</span><span class="w"> </span><span class="p">[]</span><span class="nx">Entry</span><span class="p">)</span>
 </code></pre></div>
-<p>FeedTransaction sends the changes of one MULTI/EXEC to every replica, wrapped in MULTI and EXEC so the replica applies them all at once. Each replica gets only the entries whose slots it already has; one that has none of them gets nothing. Worker only.</p>
+<p>FeedTransaction records the changes of one MULTI/EXEC in the backlog as one change, and sends them to every replica, wrapped in MULTI and EXEC so the replica applies them all at once. A replica still being copied gets only the entries whose slots it already has; one that has none of them gets nothing. Worker only.</p>
+<p><a name="Master.FullSyncs"></a></p>
+<h3 id="func-master-fullsyncs">func (*Master) FullSyncs<a class="headerlink" href="#func-master-fullsyncs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">FullSyncs</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+</code></pre></div>
+<p><a name="Master.Offset"></a></p>
+<h3 id="func-master-offset">func (*Master) Offset<a class="headerlink" href="#func-master-offset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Offset</span><span class="p">()</span><span class="w"> </span><span class="kt">int64</span>
+</code></pre></div>
+<p><a name="Master.PartialSyncs"></a></p>
+<h3 id="func-master-partialsyncs">func (*Master) PartialSyncs<a class="headerlink" href="#func-master-partialsyncs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">PartialSyncs</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+</code></pre></div>
+<p><a name="Master.ReplID"></a></p>
+<h3 id="func-master-replid">func (*Master) ReplID<a class="headerlink" href="#func-master-replid" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">ReplID</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span>
+</code></pre></div>
+<p>ReplID, Offset, FullSyncs and PartialSyncs are for INFO replication. Worker only.</p>
 <p><a name="Master.Serve"></a></p>
 <h3 id="func-master-serve">func (*Master) Serve<a class="headerlink" href="#func-master-serve" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Serve</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">conn</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span><span class="w"> </span><span class="nx">run</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="kd">func</span><span class="p">())</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="o">*</span><span class="nx">Master</span><span class="p">)</span><span class="w"> </span><span class="nx">Serve</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">conn</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span><span class="w"> </span><span class="nx">run</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="kd">func</span><span class="p">())</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="nx">replID</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">offset</span><span class="w"> </span><span class="kt">int64</span><span class="p">)</span>
 </code></pre></div>
-<p>Serve feeds the replica on conn, which has just sent SYNC, until it disconnects or ctx is cancelled. It runs on the connection's goroutine; run must run a function on the dispatch worker and wait for it to finish, returning false if the server is shutting down.</p>
+<p>Serve feeds the replica on conn, which has just sent PSYNC replID offset (see ParsePSync), until it disconnects or ctx is cancelled. It runs on the connection's goroutine; run must run a function on the dispatch worker and wait for it to finish, returning false if the server is shutting down.</p>
+<p>If the backlog has every change the replica missed, Serve answers +CONTINUE and sends just those; otherwise it answers +FULLRESYNC and copies everything.</p>
 <p>Generated by <a href="https://github.com/princjef/gomarkdoc">gomarkdoc</a></p>
 
 
