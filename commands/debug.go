@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/vinayhpandya/rediska/core"
+	"github.com/vinayhpandya/rediska/replication"
 	"github.com/vinayhpandya/rediska/store"
 )
 
@@ -23,6 +24,15 @@ func handleDebug(args []string) []byte {
 		return core.EncodeInteger(store.Default.UsedMemory())
 	case "KEYS":
 		return core.EncodeInteger(int64(store.Default.KeyCount()))
+	case "RECONNECT":
+		// On a replica: drop the link to the master, as if the network had
+		// failed. It connects again a second later and asks for just the
+		// changes it missed. For testing partial resync.
+		if replication.Upstream == nil {
+			return core.EncodeError("ERR DEBUG RECONNECT only works on a replica")
+		}
+		replication.Upstream.Reconnect()
+		return core.EncodeSimpleString("OK")
 	case "DIGEST":
 		// A fingerprint of all the data: a replica that holds exactly its
 		// master's data shows the same digest.

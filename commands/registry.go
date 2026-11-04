@@ -60,9 +60,10 @@ func init() {
 }
 
 // recording reports whether anyone needs to hear about changes: the AOF,
-// or replicas.
+// or replication. Once a replica has connected, replication records every
+// change, even while no replica is connected (see Master.Active).
 func recording() bool {
-	return aof != nil || replication.Default.Count() > 0
+	return aof != nil || replication.Default.Active()
 }
 
 // updateTracking turns deletion tracking on while changes are recorded,
@@ -114,6 +115,9 @@ func writeEntry(args []string) {
 		}
 	}
 	if replication.Default.Count() > 0 {
+		replication.Default.Feed(replication.Entry{Slot: entrySlot(args), Args: args})
+	}
+	if replication.Default.Active() {
 		replication.Default.Feed(replication.Entry{Slot: entrySlot(args), Args: args})
 	}
 }
@@ -259,6 +263,13 @@ func DispatchBatch(cmd []*Command) []byte {
 			}
 		}
 		if replication.Default.Count() > 0 {
+			entries := make([]replication.Entry, len(txEntries))
+			for i, args := range txEntries {
+				entries[i] = replication.Entry{Slot: entrySlot(args), Args: args}
+			}
+			replication.Default.FeedTransaction(entries)
+		}
+		if replication.Default.Active() {
 			entries := make([]replication.Entry, len(txEntries))
 			for i, args := range txEntries {
 				entries[i] = replication.Entry{Slot: entrySlot(args), Args: args}

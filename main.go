@@ -35,6 +35,7 @@ import (
 
 	"github.com/vinayhpandya/rediska/cluster"
 	"github.com/vinayhpandya/rediska/config"
+	"github.com/vinayhpandya/rediska/replication"
 	"github.com/vinayhpandya/rediska/server"
 	"github.com/vinayhpandya/rediska/store"
 )
@@ -82,6 +83,7 @@ func setUpFlags() {
 	flag.StringVar(&config.ClusterNodeName, "cluster-node-name", "", "This node's name in the cluster layout file (default: find it by --port)")
 	flag.IntVar(&config.ClusterNodeTimeout, "cluster-node-timeout", 15000, "Milliseconds without an answer before a node is suspected to have failed")
 	flag.BoolVar(&showVersion, "version", false, "Print the version and exit")
+	flag.IntVar(&config.ReplBacklogSize, "repl-backlog-size", replication.DefaultBacklogSize, "Bytes of recent changes a master keeps, so a replica that reconnects gets just what it missed")
 	flag.Parse()
 }
 
@@ -107,6 +109,10 @@ func main() {
 		store.Default.EnableSlotIndex()
 		log.Printf("cluster: I am %s (%s), owning slots %v", layout.Self.Name, layout.Self.Addr, layout.Self.Slots)
 	}
+	if config.ReplBacklogSize <= 0 {
+		log.Fatal("--repl-backlog-size must be more than 0")
+	}
+	replication.Default.BacklogSize = config.ReplBacklogSize
 	store.Default.SetPolicy(config.MaxMemoryPolicy)
 	store.SetLFUParams(config.LFULogFactor, config.LFUDecayTime)
 	context, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
