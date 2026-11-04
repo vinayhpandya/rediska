@@ -25,8 +25,11 @@ func infoCluster() string {
 }
 
 // infoReplication shows this node's role. A replica also shows its
-// master's address and whether its link to the master is up; a master
-// shows how many replicas are connected to it.
+// master's address, whether its link to the master is up, and the offset
+// of the last change it applied. A master shows how many replicas are
+// connected, its replication ID and newest offset, and how many full and
+// partial resyncs it has done. A replica is as many changes behind as the
+// difference between master_repl_offset and its slave_repl_offset.
 func infoReplication() string {
 	var b strings.Builder
 	b.WriteString("# Replication\r\n")
@@ -38,11 +41,14 @@ func infoReplication() string {
 			if up.Up() {
 				status = "up"
 			}
-			fmt.Fprintf(&b, "master_host:%s\r\nmaster_port:%s\r\nmaster_link_status:%s\r\n", host, port, status)
+			fmt.Fprintf(&b, "master_host:%s\r\nmaster_port:%s\r\nmaster_link_status:%s\r\nslave_repl_offset:%d\r\n",
+				host, port, status, up.Offset())
 		}
 		return b.String()
 	}
-	fmt.Fprintf(&b, "role:master\r\nconnected_slaves:%d\r\n", replication.Default.Count())
+	m := replication.Default
+	fmt.Fprintf(&b, "role:master\r\nconnected_slaves:%d\r\nmaster_replid:%s\r\nmaster_repl_offset:%d\r\nsync_full:%d\r\nsync_partial_ok:%d\r\n",
+		m.Count(), m.ReplID(), m.Offset(), m.FullSyncs(), m.PartialSyncs())
 	return b.String()
 }
 
